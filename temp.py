@@ -1,6 +1,6 @@
 
-list_ = []
-if list_:
-    print(1)
-else:
-    print(0)
+
+str_ = '1,1,'
+list_str_ = str_.split(',')
+print(list_str_)
+
