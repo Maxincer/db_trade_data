@@ -14,6 +14,7 @@ from pymongo import MongoClient
 from WindPy import w
 
 STR_TODAY = datetime.today().strftime('%Y%m%d')
+# STR_TODAY = '20210416'
 
 
 class Globals:
@@ -46,7 +47,6 @@ class Globals:
 
         # trade
         self.db_trade_data = self.server_mongodb['trade_data']
-        self.col_trade_glv = self.db_trade_data['exposure_monitor_glv']
         self.col_trade_rawdata_fund = self.db_trade_data['trade_raw_data_fund']
         self.col_trade_rawdata_holding = self.db_trade_data['trade_raw_data_holding']
         self.col_trade_rawdata_order = self.db_trade_data['trade_raw_data_order']
@@ -57,6 +57,10 @@ class Globals:
         self.col_trade_fmtdata_order = self.db_trade_data['trade_formatted_data_order']
         self.col_trade_fmtdata_short_position = self.db_trade_data['trade_formatted_data_short_position']
 
+        self.col_trade_bs_by_acct = self.db_trade_data['trade_balance_sheet_by_acctid']
+        self.col_trade_bs_by_prdcode = self.db_trade_data['trade_balance_sheet_by_prdcode']
+
+        # post trade
         self.db_post_trade_data = self.server_mongodb['post_trade_data']
 
         # 其他
@@ -68,6 +72,8 @@ class Globals:
             'swhy_xtpb', 'cj_xtpb', 'hengt_xtpb', 'zygj_xtpb', 'gd_xtpb', 'tpy_xtpb'
         ]
         self.list_data_src_htpb = ['gy_htpb', 'gs_htpb', 'gj_htpb', 'sh_htpb']
+        self.dict_future2multiplier = {'IC': 200, 'IH': 300, 'IF': 300}
+        self.dict_future2spot = {'IC': '000905.SH', 'IH': '000016.SH', 'IF': '000300.SH'}
 
     @classmethod
     def get_secid2windcode(cls, str_secid):

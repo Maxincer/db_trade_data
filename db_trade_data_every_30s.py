@@ -5,16 +5,24 @@
 
 """
 data type: 数据类型
+
+假设:
+1. patch 默认 fmtted
+
+
+todo:
+    1. 未处理patch data
+    2. 首期版本以满足公司传统股票策略产品为主
 """
 
+from datetime import datetime
+import time
+from threading import Thread
 import orjson
 import pandas as pd
 import redis
 from trader_v1 import Trader
 import codecs
-import threading
-import datetime
-import time
 import logging
 from logging.handlers import RotatingFileHandler
 from stock_utils import ID2Source, get_sectype_from_code
@@ -29,24 +37,24 @@ fh.setFormatter(logging.Formatter('%(asctime)s - line:%(lineno)d - %(levelname)s
 logger_expo.addHandler(fh)
 
 
-REDIS_HOST = '47.103.187.110'
-REDIS_PORT = 6379
-REDIS_PASS = 'Ms123456'
-server_redis_md = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASS)
-
-gl = Globals()
-list_warn = []
-
-
-class ReadRaw:
+class GenerateExposureMonitorData:
     def __init__(self):
-        pass
+        self.redis_host = '47.103.187.110'
+        self.redis_port = 6379
+        self.redis_pass = 'Ms123456'
+        self.server_redis_md = redis.Redis(host=self.redis_host, port=self.redis_port, password=self.redis_pass)
 
-    def read_rawdata_from_trdclient(self, fpath, sheet_type, data_source_type, accttype, idinfo, dict_acctidbymxz2acctidbyborker):
+        self.gl = Globals()
+        self.list_warn = []
+        self.id2source = ID2Source(self.gl.db_basicinfo, 'data/security_id.xlsx')
+
+    def read_rawdata_from_trdclient(
+            self, fpath, sheet_type, data_source_type, accttype, idinfo, dict_acctidbymxz2acctidbyborker
+    ):
         list_ret = []
         if sheet_type == 'fund':
             if data_source_type in ['zx_wealthcats']:
-                fpath_replaced = fpath.replace('<YYYY-MM-DD>', gl.dt_today.strftime('%Y-%m-%d'))
+                fpath_replaced = fpath.replace('<YYYY-MM-DD>', self.gl.dt_today.strftime('%Y-%m-%d'))
                 with codecs.open(fpath_replaced, 'rb', 'utf-8-sig') as f:
                     list_datalines = f.readlines()
                     if len(list_datalines) == 0:
@@ -65,7 +73,7 @@ class ReadRaw:
                                 list_ret.append(dict_fund_wealthcats)
 
             elif data_source_type in ['ax_jzpb']:
-                fpath_replaced = fpath.replace('<YYYYMMDD>', gl.str_today)
+                fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today)
                 with open(fpath_replaced, encoding='ansi') as f:
                     list_datalines = f.readlines()
                     if len(list_datalines) == 0:
@@ -80,8 +88,8 @@ class ReadRaw:
                                 dict_fund['AcctIDByMXZ'] = idinfo[dict_fund['账户编号']]
                                 list_ret.append(dict_fund)
 
-            elif data_source_type in gl.list_data_src_xtpb:
-                fpath_replaced = fpath.replace('<YYYYMMDD>', gl.str_today)
+            elif data_source_type in self.gl.list_data_src_xtpb:
+                fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today)
                 with codecs.open(fpath_replaced, 'rb', 'gbk') as f:
                     list_datalines = f.readlines()
                     if len(list_datalines) == 0:
@@ -99,7 +107,7 @@ class ReadRaw:
             elif data_source_type in ['hait_ehfz_api']:
                 for acctidbybroker in idinfo:
                     try:
-                        fpath_replaced = fpath.replace('<YYYYMMDD>', gl.str_today).replace('<ID>', acctidbybroker)
+                        fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today).replace('<ID>', acctidbybroker)
                         with codecs.open(fpath_replaced, 'rb', 'gbk') as f:
                             list_datalines = f.readlines()
                             if len(list_datalines) == 0:
@@ -115,14 +123,14 @@ class ReadRaw:
 
                     except FileNotFoundError as e:
                         e = str(e)
-                        if e not in list_warn:
-                            list_warn.append(e)
+                        if e not in self.list_warn:
+                            self.list_warn.append(e)
                             logger_expo.error(e)
 
             elif data_source_type in ['huat_matic_tsi']:
                 for acctidbybroker in idinfo:
                     try:
-                        fpath_replaced = fpath.replace('<YYYYMMDD>', gl.str_today).replace('<ID>', acctidbybroker)
+                        fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today).replace('<ID>', acctidbybroker)
                         with codecs.open(fpath_replaced, 'rb', encoding='gbk') as f:
                             list_datalines = f.readlines()
                             if len(list_datalines) == 0:
@@ -139,12 +147,12 @@ class ReadRaw:
 
                     except FileNotFoundError as e:
                         e = str(e)
-                        if e not in list_warn:
-                            list_warn.append(e)
+                        if e not in self.list_warn:
+                            self.list_warn.append(e)
                             logger_expo.error(e)
 
-            elif data_source_type in gl.list_data_src_htpb:  # 有改动
-                fpath_replaced = fpath.replace('<YYYYMMDD>', gl.str_today)
+            elif data_source_type in self.gl.list_data_src_htpb:  # 有改动
+                fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today)
                 with codecs.open(fpath_replaced, 'rb', 'gbk') as f:
                     list_datalines = f.readlines()
                     if len(list_datalines) == 0:
@@ -160,7 +168,7 @@ class ReadRaw:
                                 list_ret.append(dict_fund)
 
             elif data_source_type in ['gtja_pluto']:  # 有改动
-                fpath_replaced = fpath.replace('<YYYYMMDD>', gl.str_today)
+                fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today)
                 with codecs.open(fpath_replaced, 'rb', 'gbk') as f:
                     list_datalines = f.readlines()
                     if len(list_datalines) == 0:
@@ -176,7 +184,7 @@ class ReadRaw:
                                 list_ret.append(dict_fund)
 
             elif data_source_type in ['yh_apama'] and accttype == 'c':  # 有改动
-                fpath_replaced = fpath.replace('<YYYYMMDD>', gl.str_today)
+                fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today)
                 with codecs.open(fpath_replaced) as f:
                     list_datalines = f.readlines()
                     list_keys = ['请求编号', '资金账号', '币种', '可用余额', '可取金额', '冻结金额', '总资产', '证券市值', '资金资产']
@@ -194,7 +202,7 @@ class ReadRaw:
                         else:
                             logger_expo.warning('strange fund keys of yh_apama %s' % fpath)
             elif data_source_type in ['yh_apama'] and accttype == 'm':
-                fpath_replaced = fpath.replace('<YYYYMMDD>', gl.str_today)
+                fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today)
                 with codecs.open(fpath_replaced) as f:
                     list_datalines = f.readlines()
                     list_keys = ['请求编号', '资金账号', '币种', '可用余额', '可取金额', '冻结金额', '总资产', '证券市值',
@@ -215,7 +223,7 @@ class ReadRaw:
                             logger_expo.warning('strange fund key of yh_apama %s' % fpath)
 
             elif data_source_type in ['gf_tyt']:
-                fpath_replaced = fpath.replace('<YYYYMMDD>', gl.str_today)
+                fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today)
                 with codecs.open(fpath_replaced, 'rb', 'gbk') as f:
                     list_datalines = f.readlines()
                     if len(list_datalines) == 0:
@@ -233,7 +241,7 @@ class ReadRaw:
             elif data_source_type in ['dh_xtqmt_jjb', 'gd_xtqmt_jjb', 'hr_xtqmt_jjb', 'zhes_xtqmt_jjb', 'gj_xtqmt_jjb']:
                 for dldfilter in idinfo:
                     fpath_replaced = (
-                        fpath.replace('<YYYYMMDD>', gl.str_today)
+                        fpath.replace('<YYYYMMDD>', self.gl.str_today)
                              .replace('<ID>', dict_acctidbymxz2acctidbyborker[idinfo[dldfilter]])
                     )
                     with open(fpath_replaced) as f:
@@ -250,16 +258,19 @@ class ReadRaw:
                                     dict_fund['AcctIDByMXZ'] = idinfo[dict_fund['账号']]
                                     list_ret.append(dict_fund)
 
+            elif data_source_type in ['trader_api']:
+                pass
+
             else:
                 e = f'Field data_source_type {data_source_type} not exist in basic info!'
                 print(e)
-                if e not in list_warn:
-                    list_warn.append(e)
+                if e not in self.list_warn:
+                    self.list_warn.append(e)
                     logger_expo.error(e)
 
         elif sheet_type == 'holding':
             if data_source_type in ['zx_wealthcats']:
-                fpath_replaced = fpath.replace('<YYYY-MM-DD>', gl.dt_today.strftime('%Y-%m-%d'))
+                fpath_replaced = fpath.replace('<YYYY-MM-DD>', self.gl.dt_today.strftime('%Y-%m-%d'))
                 with codecs.open(fpath_replaced, 'rb', 'utf-8-sig') as f:
                     list_datalines = f.readlines()
                     if len(list_datalines) == 0:
@@ -281,7 +292,7 @@ class ReadRaw:
                                 list_ret.append(dict_rec_holding)
 
             elif data_source_type in ['ax_jzpb']:  # 有改动
-                fpath_replaced = fpath.replace('<YYYYMMDD>', gl.str_today)
+                fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today)
                 with open(fpath_replaced, encoding='ansi') as f:
                     list_datalines = f.readlines()
                     if len(list_datalines) == 0:
@@ -296,8 +307,8 @@ class ReadRaw:
                                 dict_rec_holding['AcctIDByMXZ'] = idinfo[dict_rec_holding['账户编号']]
                                 list_ret.append(dict_rec_holding)
 
-            elif data_source_type in gl.list_data_src_xtpb:
-                fpath_replaced = fpath.replace('<YYYYMMDD>', gl.str_today)
+            elif data_source_type in self.gl.list_data_src_xtpb:
+                fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today)
                 with codecs.open(fpath_replaced, 'rb', 'gbk') as f:
                     list_datalines = f.readlines()
                     if len(list_datalines) == 0:
@@ -314,7 +325,7 @@ class ReadRaw:
 
             elif data_source_type in ['hait_ehfz_api']:  # 有改动
                 for acctidbybroker in idinfo:
-                    fpath_replaced = fpath.replace('<YYYYMMDD>', gl.str_today).replace('<ID>', acctidbybroker)
+                    fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today).replace('<ID>', acctidbybroker)
                     try:
                         with codecs.open(fpath_replaced, 'rb', 'gbk') as f:
                             list_datalines = f.readlines()
@@ -331,13 +342,13 @@ class ReadRaw:
 
                     except FileNotFoundError as e:
                         e = str(e)
-                        if e not in list_warn:
-                            list_warn.append(e)
+                        if e not in self.list_warn:
+                            self.list_warn.append(e)
                             logger_expo.error(e)
 
             elif data_source_type in ['huat_matic_tsi']:
                 for acctidbybroker in idinfo:
-                    fpath_replaced = fpath.replace('<YYYYMMDD>', gl.str_today).replace('<ID>', acctidbybroker)
+                    fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today).replace('<ID>', acctidbybroker)
                     try:
                         with codecs.open(fpath_replaced, 'rb', encoding='gbk') as f:
                             list_datalines = f.readlines()
@@ -354,12 +365,12 @@ class ReadRaw:
                                     list_ret.append(dict_holding)
                     except FileNotFoundError as e:
                         e = str(e)
-                        if e not in list_warn:
-                            list_warn.append(e)
+                        if e not in self.list_warn:
+                            self.list_warn.append(e)
                             logger_expo.error(e)
 
-            elif data_source_type in gl.list_data_src_htpb:  # 有改动
-                fpath_replaced = fpath.replace('<YYYYMMDD>', gl.str_today)
+            elif data_source_type in self.gl.list_data_src_htpb:  # 有改动
+                fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today)
                 with codecs.open(fpath_replaced, 'rb', 'gbk') as f:
                     list_datalines = f.readlines()
                     if len(list_datalines) == 0:
@@ -375,7 +386,7 @@ class ReadRaw:
                                 list_ret.append(dict_rec_holding)
 
             elif data_source_type in ['gtja_pluto']:  # 有改动
-                fpath_replaced = fpath.replace('<YYYYMMDD>', gl.str_today)
+                fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today)
                 with codecs.open(fpath_replaced, 'rb', 'gbk') as f:
                     list_datalines = f.readlines()
                     if len(list_datalines) == 0:
@@ -391,7 +402,7 @@ class ReadRaw:
                                 list_ret.append(dict_rec_holding)
 
             elif data_source_type in ['yh_apama'] and accttype == 'm':  # 有改动
-                fpath_replaced = fpath.replace('<YYYYMMDD>', gl.str_today)
+                fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today)
                 with codecs.open(fpath_replaced) as f:
                     list_datalines = f.readlines()
                     list_keys = ['请求编号', '资金账号', '证券代码', '交易市场', '股份可用', '当前持仓', '持仓成本', '最新价',
@@ -411,7 +422,7 @@ class ReadRaw:
                             logger_expo.warning('strange holding keys of yh_apama %s' % fpath_replaced)
 
             elif data_source_type in ['yh_apama'] and accttype == 'c':  # 有改动
-                fpath_replaced = fpath.replace('<YYYYMMDD>', gl.str_today)
+                fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today)
                 with codecs.open(fpath_replaced) as f:
                     list_datalines = f.readlines()
                     list_keys = ['请求编号', '资金账号', '证券代码', '交易市场', '股份可用', '当前持仓', '持仓成本', '最新价',
@@ -430,7 +441,7 @@ class ReadRaw:
                             logger_expo.warning('strange holidng keys of yh_apama %s' % fpath_replaced)
 
             elif data_source_type in ['gf_tyt']:
-                fpath_replaced = fpath.replace('<YYYYMMDD>', gl.str_today)
+                fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today)
                 with codecs.open(fpath_replaced, 'rb', 'gbk') as f:
                     list_datalines = f.readlines()
                     if len(list_datalines) == 0:
@@ -448,7 +459,7 @@ class ReadRaw:
             elif data_source_type in ['dh_xtqmt_jjb', 'gd_xtqmt_jjb', 'hr_xtqmt_jjb', 'zhes_xtqmt_jjb', 'gj_xtqmt_jjb']:
                 for dldfilter in idinfo:
                     fpath_replaced = (
-                        fpath.replace('<YYYYMMDD>', gl.str_today)
+                        fpath.replace('<YYYYMMDD>', self.gl.str_today)
                              .replace('<ID>', dict_acctidbymxz2acctidbyborker[idinfo[dldfilter]])
                     )
                     with open(fpath_replaced) as f:
@@ -467,8 +478,8 @@ class ReadRaw:
 
         elif sheet_type == 'order':
             # todo 先做这几个有secloan的（不然order没意义）:
-            if data_source_type in gl.list_data_src_xtpb:
-                fpath_replaced = fpath.replace('<YYYYMMDD>', gl.str_today)
+            if data_source_type in self.gl.list_data_src_xtpb:
+                fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today)
                 with codecs.open(fpath_replaced, 'rb', 'gbk') as f:
                     list_datalines = f.readlines()
                     if len(list_datalines) == 0:
@@ -486,7 +497,7 @@ class ReadRaw:
             elif data_source_type in ['hait_ehfz_api']:
                 for acctidbybroker in idinfo:
                     try:
-                        fpath_replaced = fpath.replace('<YYYYMMDD>', gl.str_today).replace('<ID>', acctidbybroker)
+                        fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today).replace('<ID>', acctidbybroker)
                         with codecs.open(fpath_replaced, 'rb', 'gbk') as f:
                             list_datalines = f.readlines()
                             if len(list_datalines) == 0:
@@ -502,14 +513,14 @@ class ReadRaw:
 
                     except FileNotFoundError as e:
                         e = str(e)
-                        if e not in list_warn:
-                            list_warn.append(e)
+                        if e not in self.list_warn:
+                            self.list_warn.append(e)
                             logger_expo.error(e)
 
             elif data_source_type in ['huat_matic_tsi']:  # 有改动
                 for acctidbybroker in idinfo:
                     try:
-                        fpath_replaced = fpath.replace('<YYYYMMDD>', gl.str_today).replace('<ID>', acctidbybroker)
+                        fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today).replace('<ID>', acctidbybroker)
                         with codecs.open(fpath_replaced, 'rb', encoding='gbk') as f:
                             list_datalines = f.readlines()
                             if len(list_datalines) == 0:
@@ -525,12 +536,12 @@ class ReadRaw:
 
                     except FileNotFoundError as e:
                         e = str(e)
-                        if e not in list_warn:
-                            list_warn.append(e)
+                        if e not in self.list_warn:
+                            self.list_warn.append(e)
                             logger_expo.error(e)
 
             elif data_source_type in ['gtja_pluto']:  # 有改动
-                fpath_replaced = fpath.replace('<YYYYMMDD>', gl.str_today)
+                fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today)
                 with codecs.open(fpath_replaced, 'rb', 'gbk') as f:
                     list_datalines = f.readlines()
                     if len(list_datalines) == 0:
@@ -546,7 +557,7 @@ class ReadRaw:
                                 list_ret.append(dict_rec_order)
 
             elif data_source_type in ['yh_apama']:  # 成交明细不是委托明细
-                fpath_replaced = fpath.replace('<YYYYMMDD>', gl.str_today)
+                fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today)
                 with codecs.open(fpath_replaced) as f:
                     list_datalines = f.readlines()
                     list_keys = ['请求编号', '资金账号', '证券代码', '交易市场', '委托序号', '买卖方向', '股东号', '成交时间',
@@ -562,7 +573,7 @@ class ReadRaw:
                             logger_expo.warning('strange order keys of yh_apama %s' % fpath)
 
             elif data_source_type in ['ax_jzpb']:
-                fpath_replaced = fpath.replace('<YYYYMMDD>', gl.str_today)
+                fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today)
                 with open(fpath_replaced, encoding='ansi') as f:
                     list_datalines = f.readlines()
                     if len(list_datalines) == 0:
@@ -581,7 +592,7 @@ class ReadRaw:
                                 list_ret.append(dict_rec_order)
 
             elif data_source_type in ['zx_wealthcats']:
-                fpath_replaced = fpath.replace('<YYYY-MM-DD>', gl.dt_today.strftime('%Y-%m-%d'))
+                fpath_replaced = fpath.replace('<YYYY-MM-DD>', self.gl.dt_today.strftime('%Y-%m-%d'))
                 with codecs.open(fpath_replaced, 'rb', 'utf-8-sig') as f:
                     list_datalines = f.readlines()
                     if len(list_datalines) == 0:
@@ -596,8 +607,8 @@ class ReadRaw:
                                 dict_rec_order['AcctIDByMXZ'] = idinfo[dict_rec_order['账户']]
                                 list_ret.append(dict_rec_order)
 
-            elif data_source_type in gl.list_data_src_htpb:  # 有改动
-                fpath_replaced = fpath.replace('<YYYYMMDD>', gl.str_today)
+            elif data_source_type in self.gl.list_data_src_htpb:  # 有改动
+                fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today)
                 with codecs.open(fpath_replaced, 'rb', 'gbk') as f:
                     list_datalines = f.readlines()
                     if len(list_datalines) == 0:
@@ -613,7 +624,7 @@ class ReadRaw:
                                 list_ret.append(dict_rec_holding)
 
             elif data_source_type in ['gf_tyt']:
-                fpath_replaced = fpath.replace('<YYYYMMDD>', gl.str_today)
+                fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today)
                 with codecs.open(fpath_replaced, 'rb', 'gbk') as f:
                     list_datalines = f.readlines()
                     if len(list_datalines) == 0:
@@ -631,7 +642,7 @@ class ReadRaw:
             elif data_source_type in ['dh_xtqmt_jjb', 'gd_xtqmt_jjb', 'hr_xtqmt_jjb', 'zhes_xtqmt_jjb', 'gj_xtqmt_jjb']:
                 for dldfilter in idinfo:
                     fpath_replaced = (
-                        fpath.replace('<YYYYMMDD>', gl.str_today)
+                        fpath.replace('<YYYYMMDD>', self.gl.str_today)
                              .replace('<ID>', dict_acctidbymxz2acctidbyborker[idinfo[dldfilter]])
                     )
                     with open(fpath_replaced) as f:
@@ -655,246 +666,229 @@ class ReadRaw:
             raise ValueError('Wrong sheet name!')
         return list_ret
 
-    def update_all_rawdata(self):
-        dict_col_rawdata = {
-            'fund': gl.col_trade_rawdata_fund,
-            'holding': gl.col_trade_rawdata_holding,
-            'order': gl.col_trade_rawdata_order,
-            'short_position': gl.col_trade_rawdata_short_position
-        }
+    def update_trdraw_cmo(self):
+        while True:
+            dict_col_rawdata = {
+                'fund': self.gl.col_trade_rawdata_fund,
+                'holding': self.gl.col_trade_rawdata_holding,
+                'order': self.gl.col_trade_rawdata_order,
+                'short_position': self.gl.col_trade_rawdata_short_position
+            }
 
-        dict_fpath_trddata2acct = {}
-        dict_acctidbymxz2acctidbybroker = {}
-        for dict_acctinfo in gl.col_acctinfo.find({'DataDate': gl.str_today, 'DataDownloadMark': 1}):
-            fpath_trddata = dict_acctinfo['TradeDataFilePath']
-            acctidbymxz = dict_acctinfo['AcctIDByMXZ']
-            acctidbybroker = dict_acctinfo['AcctIDByBroker']
-            dict_acctidbymxz2acctidbybroker.update({acctidbymxz: acctidbybroker})
-            if fpath_trddata:
-                if 'DownloadDataFilter' in dict_acctinfo and dict_acctinfo['DownloadDataFilter']:
-                    dldfilter = dict_acctinfo['DownloadDataFilter']
-                else:
-                    dldfilter = dict_acctinfo['AcctIDByBroker']
-                if fpath_trddata in dict_fpath_trddata2acct:
-                    dict_fpath_trddata2acct[fpath_trddata].update({dldfilter: dict_acctinfo['AcctIDByMXZ']})
-                else:
-                    # 假设： 同一地址 data_source_type, accttype一样, 普通户和信用户肯定分开保存
-                    dict_fpath_trddata2acct[fpath_trddata] = {
-                        dldfilter: dict_acctinfo['AcctIDByMXZ'],
-                        'AcctType': dict_acctinfo['AcctType'],
-                        'DataSourceType': dict_acctinfo['DataSourceType']
-                    }
+            dict_fpath_trddata2acct = {}
+            dict_acctidbymxz2acctidbybroker = {}
+            for dict_acctinfo in self.gl.col_acctinfo.find({'DataDate': self.gl.str_today, 'DataDownloadMark': 1}):
+                fpath_trddata = dict_acctinfo['TradeDataFilePath']
+                acctidbymxz = dict_acctinfo['AcctIDByMXZ']
+                acctidbybroker = dict_acctinfo['AcctIDByBroker']
+                dict_acctidbymxz2acctidbybroker.update({acctidbymxz: acctidbybroker})
+                if fpath_trddata:
+                    if dict_acctinfo['DownloadDataFilter']:
+                        dldfilter = dict_acctinfo['DownloadDataFilter']
+                    else:
+                        dldfilter = dict_acctinfo['AcctIDByBroker']
+                    if fpath_trddata in dict_fpath_trddata2acct:
+                        dict_fpath_trddata2acct[fpath_trddata].update({dldfilter: dict_acctinfo['AcctIDByMXZ']})
+                    else:
+                        # 假设： 同一地址 data_source_type, accttype一样, 普通户和信用户肯定分开保存
+                        dict_fpath_trddata2acct[fpath_trddata] = {
+                            dldfilter: dict_acctinfo['AcctIDByMXZ'],
+                            'AcctType': dict_acctinfo['AcctType'],
+                            'DataSourceType': dict_acctinfo['DataSourceType']
+                        }
 
-        dict_list_upload_recs = {'fund': [], 'holding': [], 'order': [], 'short_position': []}
-        for fpath_trddata in dict_fpath_trddata2acct:
-            info = dict_fpath_trddata2acct[fpath_trddata]
-            list_fpath_data = fpath_trddata[1:-1].split(',')
-            data_source_type = info["DataSourceType"]
-            accttype = info['AcctType']
-            id_info = info.copy()
+            dict_list_upload_recs = {'fund': [], 'holding': [], 'order': [], 'short_position': []}
+            for fpath_trddata in dict_fpath_trddata2acct:
+                info = dict_fpath_trddata2acct[fpath_trddata]
+                list_fpath_data = fpath_trddata[1:-1].split(',')
+                data_source_type = info["DataSourceType"]
+                accttype = info['AcctType']
+                id_info = info.copy()
 
-            del id_info['AcctType']
-            del id_info['DataSourceType']
+                del id_info['AcctType']
+                del id_info['DataSourceType']
 
-            for i in range(4):  # 目前只需要使用前4个
-                fpath_relative = list_fpath_data[i]
-                if fpath_relative == '':
-                    continue
-                sheet_name = ['fund', 'holding', 'order', 'short_position'][i]
+                for i in range(4):  # 目前只需要使用前4个
+                    fpath_relative = list_fpath_data[i]
+                    if fpath_relative == '':
+                        continue
+                    sheet_name = ['fund', 'holding', 'order', 'short_position'][i]
 
+                    try:
+                        list_dicts_rec = self.read_rawdata_from_trdclient(
+                            fpath_relative, sheet_name, data_source_type, accttype, id_info, dict_acctidbymxz2acctidbybroker
+                        )
+                        for dict_rec in list_dicts_rec:
+                            dict_rec['DataDate'] = self.gl.str_today
+                            dict_rec['UpdateTime'] = datetime.now().strftime('%H%M%S')
+                            dict_rec['AcctType'] = accttype
+                            dict_rec['DataSourceType'] = data_source_type
+
+                        if list_dicts_rec:
+                            dict_list_upload_recs[sheet_name] += list_dicts_rec
+
+                    except FileNotFoundError as e:
+                        e = str(e)
+                        if e not in self.list_warn:
+                            logger_expo.warning(e)
+                            self.list_warn.append(e)
+
+            for ch in dict_col_rawdata:
+                if dict_list_upload_recs[ch]:
+                    dict_col_rawdata[ch].delete_many(
+                        {'DataDate': self.gl.str_today, 'AcctType': {'$in': ['c', 'm', 'o']}}
+                    )
+                    dict_col_rawdata[ch].insert_many(dict_list_upload_recs[ch])
+            print('Update all raw data finished.')
+            time.sleep(5)
+
+    def update_trdraw_f(self):
+        while True:
+            for _ in self.gl.col_acctinfo.find({'DataDate': self.gl.str_today, 'AcctType': 'f', 'DataDownloadMark': 1}):
+                list_future_data_fund = []
+                list_future_data_holding = []
+                list_future_data_short_position = []
+                list_future_data_trdrec = []
+                prdcode = _['PrdCode']
+                acctidbymxz = _['AcctIDByMXZ']
+                acctidbyowj = _['AcctIDByOuWangJiang4FTrd']
+                data_source_type = _['DataSourceType']
                 try:
-                    list_dicts_rec = self.read_rawdata_from_trdclient(
-                        fpath_relative, sheet_name, data_source_type, accttype, id_info, dict_acctidbymxz2acctidbybroker
-                    )
-                    for dict_rec in list_dicts_rec:
-                        dict_rec['DataDate'] = gl.str_today
-                        dict_rec['UpdateTime'] = self.record_update_raw_time
-                        dict_rec['AcctType'] = accttype
-                        dict_rec['DataSourceType'] = data_source_type
-
-                    if list_dicts_rec:
-                        dict_list_upload_recs[sheet_name] += list_dicts_rec
-
-                except FileNotFoundError as e:
-                    e = str(e)
-                    if e not in list_warn:
-                        logger_expo.warning(e)
-                        list_warn.append(e)
-
-        for ch in dict_col_rawdata:
-            if dict_list_upload_recs[ch]:
-                dict_col_rawdata[ch].delete_many({'DataDate': gl.str_today})
-                dict_col_rawdata[ch].insert_many(dict_list_upload_recs[ch])
-
-        # Note2.tell future thread this function has finished,因为fmt要在raw都完成才上传
-        if self.finish_upload_flag:  # future has finished, only update once
-            gl.col_trade_glv.update_one(
-                {'DataDate': gl.str_today},
-                {'$set': {'RawFinished': True, 'RawUpdateTime': self.record_update_raw_time}}
-            )
-            self.finish_upload_flag = False  # for the upload next time
-        else:
-            self.finish_upload_flag = True  # tell future thread this function has finished
-
-    def update_trddata_f(self):
-        if self.record_update_raw_time is None:
-            self.record_update_raw_time = datetime.datetime.now().strftime('%H%M%S')
-
-        list_exceptions = []
-        for _ in gl.col_acctinfo.find({'DataDate': gl.str_today, 'AcctType': 'f', 'DataDownloadMark': 1}):
-            list_future_data_fund = []
-            list_future_data_holding = []
-            list_future_data_trdrec = []
-            prdcode = _['PrdCode']
-            acctidbymxz = _['AcctIDByMXZ']
-            acctidbyowj = _['AcctIDByOuWangJiang4FTrd']
-            data_source_type = _['DataSourceType']
-            try:
-                trader = Trader(acctidbyowj)
-            except Exception as e:
-                str_e = f"{acctidbymxz}: {str(e)}"
-                if str_e not in list_exceptions:
-                    logger_expo.error(str_e)
-                    list_exceptions.append(str_e)
-
-                if '连接不通' in str_e:  # api 关闭
+                    trader = Trader(acctidbyowj)
+                except Exception as e:
+                    str_e = f"{acctidbymxz}: {str(e)}"
                     print(str_e)
-                    break
-                else:
-                    continue
-            dict_res_fund = trader.query_capital()
-            if dict_res_fund:
-                dict_fund_to_be_update = dict_res_fund
-                dict_fund_to_be_update['DataDate'] = gl.str_today
-                dict_fund_to_be_update['AcctIDByMXZ'] = acctidbymxz
-                dict_fund_to_be_update['AcctIDByOWJ'] = acctidbyowj
-                dict_fund_to_be_update['PrdCode'] = prdcode
-                dict_fund_to_be_update['DataSourceType'] = data_source_type
-                dict_fund_to_be_update['UpdateTime'] = self.record_update_raw_time
-                list_future_data_fund.append(dict_fund_to_be_update)
-                if list_future_data_fund:
-                    gl.col_trade_rawdata_fund.delete_many(
-                        {'DataDate': gl.str_today, 'AcctIDByMXZ': acctidbymxz}
-                    )
-                    gl.col_trade_rawdata_fund.insert_many(list_future_data_fund)
+                    if str_e not in self.list_warn:
+                        logger_expo.error(str_e)
+                        self.list_warn.append(str_e)
 
-            list_list_res_holding = trader.query_holding()
-            list_keys_holding = [
-                'exchange', 'instrument_id', 'direction', 'hedge', 'position', 'position_td', 'open_volume',
-                'close_volume', 'unknown1', 'unknown2', 'unknown3'
-            ]
-            if len(list_list_res_holding):
-                list_dicts_holding_to_be_update = list_list_res_holding
-                for list_holding_to_be_update in list_dicts_holding_to_be_update:
-                    dict_holding_to_be_update = dict(zip(list_keys_holding, list_holding_to_be_update))
-                    dict_holding_to_be_update['DataDate'] = gl.str_today
-                    dict_holding_to_be_update['AcctIDByMXZ'] = acctidbymxz
-                    dict_holding_to_be_update['AcctIDByOWJ'] = acctidbyowj
-                    dict_holding_to_be_update['PrdCode'] = prdcode
-                    dict_holding_to_be_update['DataSourceType'] = data_source_type
-                    dict_holding_to_be_update['UpdateTime'] = self.record_update_raw_time
-                    list_future_data_holding.append(dict_holding_to_be_update)
+                    if '连接不通' in str_e:  # api 关闭
+                        print(str_e)
+                        break
+                    else:
+                        continue
 
-                if list_future_data_holding:
-                    gl.col_trade_rawdata_holding.delete_many(
-                        {'DataDate': gl.str_today, 'AcctIDByMXZ': acctidbymxz})
-                    gl.col_trade_rawdata_holding['trade_future_api_holding'].insert_many(list_future_data_holding)
+                dict_res_fund = trader.query_capital()
+                if dict_res_fund:
+                    dict_fund_to_be_update = dict_res_fund
+                    dict_fund_to_be_update['DataDate'] = self.gl.str_today
+                    dict_fund_to_be_update['AcctIDByMXZ'] = acctidbymxz
+                    dict_fund_to_be_update['AcctIDByOWJ'] = acctidbyowj
+                    dict_fund_to_be_update['PrdCode'] = prdcode
+                    dict_fund_to_be_update['DataSourceType'] = data_source_type
+                    dict_fund_to_be_update['UpdateTime'] = datetime.now().strftime('%H%M%S')
+                    list_future_data_fund.append(dict_fund_to_be_update)
+                    if list_future_data_fund:
+                        self.gl.col_trade_rawdata_fund.delete_many(
+                            {'DataDate': self.gl.str_today, 'AcctIDByMXZ': acctidbymxz}
+                        )
+                        self.gl.col_trade_rawdata_fund.insert_many(list_future_data_fund)
 
-            list_list_res_trdrecs = trader.query_trdrecs()
-            if len(list_list_res_trdrecs):
-                list_keys_trdrecs = ['instrument_id', 'direction', 'offset', 'volume', 'price', 'time', 'trader']
-                for list_res_trdrecs in list_list_res_trdrecs:
-                    dict_trdrec = dict(zip(list_keys_trdrecs, list_res_trdrecs))
-                    dict_trdrec['DataDate'] = gl.str_today
-                    dict_trdrec['AcctIDByMXZ'] = acctidbymxz
-                    dict_trdrec['AcctIDByOWJ'] = acctidbyowj
-                    dict_trdrec['PrdCode'] = prdcode
-                    dict_trdrec['DataSourceType'] = data_source_type
-                    dict_trdrec['UpdateTime'] = self.record_update_raw_time
-                    list_future_data_trdrec.append(dict_trdrec)
+                list_list_res_holding = trader.query_holding()
+                list_keys_holding = [
+                    'exchange', 'instrument_id', 'direction', 'hedge', 'position', 'position_td', 'open_volume',
+                    'close_volume', 'unknown1', 'unknown2', 'unknown3'
+                ]
 
-                if list_future_data_trdrec:
-                    gl.col_trade_rawdata_order.delete_many(
-                        {'DataDate': gl.str_today, 'AcctIDByMXZ': acctidbymxz})
-                    gl.col_trade_rawdata_order.insert_many(list_future_data_trdrec)
+                if len(list_list_res_holding):
+                    list_dicts_holding_to_be_update = list_list_res_holding
+                    for list_holding_to_be_update in list_dicts_holding_to_be_update:
+                        dict_holding_to_be_update = dict(zip(list_keys_holding, list_holding_to_be_update))
+                        dict_holding_to_be_update['DataDate'] = self.gl.str_today
+                        dict_holding_to_be_update['AcctIDByMXZ'] = acctidbymxz
+                        dict_holding_to_be_update['AcctType'] = 'f'
+                        dict_holding_to_be_update['AcctIDByOWJ'] = acctidbyowj
+                        dict_holding_to_be_update['PrdCode'] = prdcode
+                        dict_holding_to_be_update['DataSourceType'] = data_source_type
+                        dict_holding_to_be_update['UpdateTime'] = datetime.now().strftime('%H%M%S')
+                        if dict_holding_to_be_update['direction'] in ['buy']:
+                            list_future_data_holding.append(dict_holding_to_be_update)
+                        elif dict_holding_to_be_update['direction'] in ['sell']:
+                            list_future_data_short_position.append(dict_holding_to_be_update)
 
-        if self.finish_upload_flag:  # update_all_raw has finished
-            gl.col_trade_glv.update_one(
-                {'DataDate': gl.str_today},
-                {'$set': {'RawFinished': True, 'RawUpdateTime': self.record_update_raw_time}}
-            )
-            self.finish_upload_flag = False  # for the upload next time
-        else:
-            self.finish_upload_flag = True
+                    if list_future_data_holding:
+                        self.gl.col_trade_rawdata_holding.delete_many(
+                            {'DataDate': self.gl.str_today, 'AcctIDByMXZ': acctidbymxz})
+                        self.gl.col_trade_rawdata_holding.insert_many(list_future_data_holding)
 
-    def run(self):
-        thread_raw = threading.Thread(target=self.update_all_rawdata)
-        thread_raw.start()
-        thread_future = threading.Thread(target=self.update_trddata_f)
-        thread_future.start()
+                    if list_future_data_short_position:
+                        self.gl.col_trade_rawdata_short_position.delete_many(
+                            {'DataDate': self.gl.str_today, 'AcctIDByMXZ': acctidbymxz})
+                        self.gl.col_trade_rawdata_short_position.insert_many(list_future_data_short_position)
 
+                list_list_res_trdrecs = trader.query_trdrecs()
+                if len(list_list_res_trdrecs):
+                    list_keys_trdrecs = ['instrument_id', 'direction', 'offset', 'volume', 'price', 'time', 'trader']
+                    for list_res_trdrecs in list_list_res_trdrecs:
+                        dict_trdrec = dict(zip(list_keys_trdrecs, list_res_trdrecs))
+                        dict_trdrec['DataDate'] = self.gl.str_today
+                        dict_trdrec['AcctIDByMXZ'] = acctidbymxz
+                        dict_trdrec['AcctIDByOWJ'] = acctidbyowj
+                        dict_trdrec['PrdCode'] = prdcode
+                        dict_trdrec['DataSourceType'] = data_source_type
+                        dict_trdrec['UpdateTime'] = datetime.now().strftime('%H%M%S')
+                        list_future_data_trdrec.append(dict_trdrec)
 
-class FmtData:
-    def __init__(self):
-        self.id2source = ID2Source(gl.db_global, 'data/security_id.xlsx')
-        self.record_fmt_time = None
-        self.record_update_raw_time = None
-        list_warn = []
-        self.lock = threading.Lock()
+                    if list_future_data_trdrec:
+                        self.gl.col_trade_rawdata_order.delete_many(
+                            {'DataDate': self.gl.str_today, 'AcctIDByMXZ': acctidbymxz})
+                        self.gl.col_trade_rawdata_order.insert_many(list_future_data_trdrec)
+            print('Update future account finished.')
+            time.sleep(5)
 
     def formulate_raw_data(self, acctidbymxz, accttype, patchpath, sheet_type, raw_list):
-
         list_dicts_fmtted = []
-
         if accttype in ['c', 'm'] and patchpath is None:
-            # patch 默认 fmtted
             # ---------------  FUND 相关列表  ---------------------
-            # 净资产 = 总资产-总负债 = NetAsset
-            # 现金 = 总资产-总市值 普通户里= available_fund, 在资产负债表里
-            # 可用资金 = 可用担保品交易资金， 有很多定义， 不在资产负债表里，交易用
-            # 可取资金 = 总资产 - 当日交易股票市值-各种手续费-利息+分红， 不在资产负债表里，交易用
-            list_fields_af = ['可用', 'A股可用', '可用数', '现金资产', '可用金额', '资金可用金', '可用余额', 'T+0交易可用金额',
-                              'enable_balance', 'fund_asset', '可用资金', 'instravl']
-            # 新加：matic_tsi_RZRQ: fund_asset, gtja_pluto:可用资金
-            list_fields_ttasset = ['总资产', '资产', '总 资 产', '实时总资产', '单元总资产', '资产总额', '产品总资产','账户总资产',
-                                   '担保资产', 'asset_balance', 'assure_asset', '账户资产', '资产总值']
-            list_fields_na = ['netasset', 'net_asset', '账户净值', '净资产']  # 尽量避免 '产品净值' 等
-            list_fields_kqzj = ['可取资金', '可取金额', 'fetch_balance', '沪深T+1交易可用', '可取余额', 'T+1交易可用金额',
-                                '可取数']  # 'T+1交易可用金额'不算可取
-            list_fields_tl = ['总负债', 'total_debit']  #
-            # list_fields_cb = []     # 券商没义务提供，得从postdata里找
-            list_fields_mktvalue = ['总市值', 'market_value', '证券资产', '证券市值']  # 券商没义务提供，得按long-short算
+            # 现金, 资产负债表概念, 现金 = 总资产-总市值, cash account 中的cash的值 = available_fund,
+            # 可用资金, 交易概念, 包括: 可用于交易担保品资金, 可用于交易证券资金
+            list_fields_af = [
+                '可用', 'A股可用', '可用数', '现金资产', '可用金额', '资金可用金', '可用余额',
+                'T+0交易可用金额', 'enable_balance', 'fund_asset', '可用资金', 'instravl',
+            ]
+            list_fields_ttasset = [
+                '总资产', '资产', '总 资 产', '实时总资产', '单元总资产', '资产总额', '产品总资产',
+                '账户总资产', '担保资产', 'asset_balance', 'assure_asset', '账户资产', '资产总值',
+            ]
+            list_fields_na = ['netasset', 'net_asset', '账户净值', '净资产']
+            list_fields_kqzj = [
+                '可取资金', '可取金额', 'fetch_balance', '沪深T+1交易可用', '可取余额', 'T+1交易可用金额', '可取数'
+            ]
+            list_fields_tl = ['总负债', 'total_debit']
+            list_fields_mktvalue = ['总市值', 'market_value', '证券资产', '证券市值']
 
             # ---------------  Security 相关列表  ---------------------
             list_fields_secid = ['代码', '证券代码', 'stock_code', 'stkcode']
             list_fields_symbol = ['证券名称', 'stock_name', '股票名称', '名称']
             list_fields_shareholder_acctid = ['股东帐户', '股东账号', '股东代码']
-            list_fields_exchange = ['市场代码', '交易市场', '交易板块', '板块', '交易所', '交易所名称', '交易市场',
-                                    'exchange_type', 'market', '市场']
-
-            # 有优先级别的列表
-            list_fields_longqty = [
-                '当前拥股数量', '股票余额', '拥股数量', '证券余额', '证券数量', '库存数量', '持仓数量', '参考持股', '持股数量', '当前持仓',
-                '当前余额', '当前拥股', '实际数量', '实时余额', 'current_amount', 'stkholdqty'
+            list_fields_exchange = [
+                '市场代码', '交易市场', '交易板块', '板块', '交易所', '交易所名称', '交易市场', 'exchange_type', 'market', '市场'
             ]
-            dict_exchange2secidsrc = {'深A': 'SZSE', '沪A': 'SSE',
-                                      '深Ａ': 'SZSE', '沪Ａ': 'SSE',
-                                      '上海Ａ': 'SSE', '深圳Ａ': 'SZSE',
-                                      '上海Ａ股': 'SSE', '深圳Ａ股': 'SZSE',
-                                      '上海A股': 'SSE', '深圳A股': 'SZSE',
-                                      'SH': 'SSE', 'SZ': 'SZSE',
-                                      '上交所A': 'SSE', '深交所A': 'SZSE',
-                                      '上证所': 'SSE', '深交所': 'SZSE',
-                                      }
-            dict_ambigu_secidsrc = {'hait_ehfz_api': {'1': 'SZSE', '2': 'SSE'},
-                                    'gtja_pluto': {'1': 'SSE', '2': "SZSE"},
-                                    'huat_matic_tsi': {'1': 'SSE', '2': 'SZSE'},
-                                    'yh_apama': {'0': 'SZSE', '2': 'SSE'},
-                                    'ax_jzpb': {
-                                        '0': 'SZSE', '1': 'SSE',
-                                        '深Ａ': 'SZSE', '沪Ａ': 'SSE',
-                                    },  # '市场; 市场代码'两个字段
-                                    'gf_tyt': {'0': 'SZSE', '1': 'SSE'}}
+
+            list_fields_longqty = [
+                '当前拥股数量', '股票余额', '拥股数量', '证券余额', '证券数量', '库存数量', '持仓数量', '参考持股', '持股数量',
+                '当前持仓', '当前余额', '当前拥股', '实际数量', '实时余额', 'current_amount', 'stkholdqty'
+            ]
+
+            dict_exchange2secidsrc = {
+                '深A': 'SZSE', '沪A': 'SSE',
+                '深Ａ': 'SZSE', '沪Ａ': 'SSE',
+                '上海Ａ': 'SSE', '深圳Ａ': 'SZSE',
+                '上海Ａ股': 'SSE', '深圳Ａ股': 'SZSE',
+                '上海A股': 'SSE', '深圳A股': 'SZSE',
+                'SH': 'SSE', 'SZ': 'SZSE',
+                '上交所A': 'SSE', '深交所A': 'SZSE',
+                '上证所': 'SSE', '深交所': 'SZSE',
+            }
+
+            dict_ambiguous_secidsrc = {
+                'hait_ehfz_api': {'1': 'SZSE', '2': 'SSE'},
+                'gtja_pluto': {'1': 'SSE', '2': "SZSE"},
+                'huat_matic_tsi': {'1': 'SSE', '2': 'SZSE'},
+                'yh_apama': {'0': 'SZSE', '2': 'SSE'},
+                'ax_jzpb': {'0': 'SZSE', '1': 'SSE', '深Ａ': 'SZSE', '沪Ａ': 'SSE'},
+                'gf_tyt': {'0': 'SZSE', '1': 'SSE'}
+            }
 
             # -------------  ORDER 相关列表  ---------------------
             # order委托/entrust除了成交时间等信息最全，不是成交(trade,deal)（没有委托量等）
@@ -906,12 +900,10 @@ class FmtData:
 
             list_fields_cumqty = ['成交数量', 'business_amount', 'matchqty', '成交量']
             list_fields_leavesqty = ['撤单数量', '撤销数量', 'withdraw_amount', 'cancelqty', '撤单量', '已撤数量']
-            # apama只有成交，委托待下，成交=终态
             list_fields_side = ['买卖标记', 'entrust_bs', '委托方向', '@交易类型', 'bsflag', '交易', '买卖标识']
             list_fields_orderqty = ['委托量', 'entrust_amount', '委托数量', 'orderqty']  # XXX_deal 会给不了委托量，委托日期，委托时间，只有成交
             list_fields_ordertime = ['委托时间', 'entrust_time', 'ordertime ', '时间', '成交时间']  # yh
             list_fields_avgpx = ['成交均价', 'business_price', '成交价格', 'orderprice']  # 以后算balance用， exposure不用
-            # list_fields_cumamt = ['成交金额', 'business_balance', 'matchamt', '成交额']
             dict_fmtted_side_name = {'买入': 'buy', '卖出': 'sell',
                                      '限价担保品买入': 'buy', '限价买入': 'buy', '担保品买入': 'buy', 'BUY': 'buy',
                                      # 担保品=券； 限价去掉,含"...“即可
@@ -921,11 +913,15 @@ class FmtData:
                                      '现券还券划拨': 'XQHQ', '现券还券划拨卖出': 'XQHQ',  # 快速交易的 hait=15, gtja=34??
                                      '买券还券划拨': 'MQHQ', '买券还券': 'MQHQ', '限价买券还券': 'MQHQ',  # 快速交易的 hait=13
                                      '撤单': 'cancel', 'ZR': 'Irrelevant', 'ZC': 'Irrelevant'}  # entrust_bs表方向时值为1，2
-            dict_ambigu_side_name = {'hait_ehfz_api': {'1': 'buy', '2': 'sell', '12': 'sell short',
-                                                       '15': 'XQHQ', '13': 'MQHQ', '0': 'cancel'},
-                                     'gtja_pluto': {'1': 'buy', '2': 'sell', '34': 'MQHQ', '32': 'sell short',
-                                                    '31': 'buy', '33': 'sell', '36': 'XQHQ'},  # 融资买入， 卖券还款
-                                     'huat_matic_tsi': {'1': 'buy', '2': 'sell'}}  # 信用户在后面讨论（需要两个字段拼起来才行）
+            dict_ambiguous_side_name = {
+                'hait_ehfz_api': {
+                    '1': 'buy', '2': 'sell', '12': 'sell short', '15': 'XQHQ', '13': 'MQHQ', '0': 'cancel'
+                },
+                'gtja_pluto': {
+                    '1': 'buy', '2': 'sell', '34': 'MQHQ', '32': 'sell short', '31': 'buy', '33': 'sell', '36': 'XQHQ'
+                },
+            }
+                # }  # 信用户在后面讨论（需要两个字段拼起来才行）
             # dict_datasource_ordstatus = {
             #     # 参考FIX：New已报； Partially Filled=部成待撤/部成，待撤=PendingCancel不算有效cumqty,中间态
             #     # 国内一般全成，部撤等都表示最终态，cumqty的数值都是有效的(Filled, Partially Canceled)，其他情况的cumqty不能算
@@ -973,22 +969,20 @@ class FmtData:
             #                          '1': 'rq', '0': 'rz',
             #                          '2': '其它负债/？？？'}  # 一般没有融资, 其它负债（2）
 
-            if sheet_type == 'fund':  # cash
+            if sheet_type == 'fund':
                 list_dicts_fund = raw_list
-                # print(list_dicts_fund)
                 if list_dicts_fund is None:
                     list_dicts_fund = []
                 for dict_fund in list_dicts_fund:
                     data_source = dict_fund['DataSourceType']
+                    str_updatetime = dict_fund['UpdateTime']
                     cash = None
-                    avlfund = None  # 'AvailableFund'
-                    ttasset = None  # 'TotalAsset'
+                    avlfund = None
+                    ttasset = None
                     mktvalue = None
                     netasset = None
-                    kqzj = None  # 可取资金
+                    kqzj = None
                     total_liability = None
-
-                    # 分两种情况： 1. cash acct: 至少要有cash 2. margin acct: 至少要有ttasset
 
                     flag_check_new_name = True  # 用来弥补之前几个list的缺漏
                     for field_af in list_fields_af:
@@ -998,8 +992,8 @@ class FmtData:
                             flag_check_new_name = False
                     err = 'unknown available_fund name %s' % data_source
                     if flag_check_new_name:
-                        if err not in list_warn:
-                            list_warn.append(err)
+                        if err not in self.list_warn:
+                            self.list_warn.append(err)
                             print(err, dict_fund)
                             logger_expo.debug((err, dict_fund))
 
@@ -1012,8 +1006,8 @@ class FmtData:
                         err = 'unknown total asset name %s' % data_source
                         if flag_check_new_name:
                             if data_source not in ['gy_htpb', 'gs_htpb']:
-                                if err not in list_warn:
-                                    list_warn.append(err)
+                                if err not in self.list_warn:
+                                    self.list_warn.append(err)
                                     print(err, dict_fund)
                                     logger_expo.debug((err, dict_fund))
                             else:
@@ -1027,8 +1021,8 @@ class FmtData:
                         err = 'unknown total market value name %s' % data_source
                         if flag_check_new_name:
                             if data_source not in ['gtja_pluto']:
-                                if err not in list_warn:
-                                    list_warn.append(err)
+                                if err not in self.list_warn:
+                                    self.list_warn.append(err)
                                     print(err, dict_fund)
                                     logger_expo.debug((err, dict_fund))
                         else:
@@ -1046,13 +1040,16 @@ class FmtData:
                         if total_liability and netasset:
                             delta = total_liability + netasset - ttasset
                             if abs(delta) > 1:
-                                err = '券商%s数据错误：总资产 - 总负债 - 净资产 =%d' % (data_source, -delta)
-                                if err not in list_warn:
-                                    list_warn.append(err)
-                                    logger_expo.error((err, dict_fund))
-                                    print(err, dict_fund)
-                                # 默认总资产正确：
-                                netasset = ttasset - total_liability
+                                if data_source in ['swhy_xtpb']:
+                                    netasset = ttasset - total_liability
+                                else:
+                                    err = '券商%s数据错误：总资产 - 总负债 - 净资产 =%d' % (data_source, -delta)
+                                    if err not in self.list_warn:
+                                        self.list_warn.append(err)
+                                        logger_expo.error((err, dict_fund))
+                                        print(err, dict_fund)
+                                    # 默认总资产正确（swhy_xtpb净资产数据错误）：
+                                    netasset = ttasset - total_liability
                         else:
                             if data_source in ['gy_htpb', 'gs_htpb', 'gj_htpb']:
                                 netasset = float(dict_fund['产品净值'])
@@ -1064,8 +1061,8 @@ class FmtData:
                                 total_liability = ttasset - netasset
                             else:
                                 err = 'unknown net asset or liability name %s' % data_source
-                                if err not in list_warn:
-                                    list_warn.append(err)
+                                if err not in self.list_warn:
+                                    self.list_warn.append(err)
                                     print(err, dict_fund)
                                     logger_expo.debug((err, dict_fund))
 
@@ -1078,8 +1075,8 @@ class FmtData:
                         err = 'unknown total asset name %s' % data_source
                         if flag_check_new_name:
                             if data_source not in ['gy_htpb', 'gs_htpb', 'gj_htpb']:
-                                if err not in list_warn:
-                                    list_warn.append(err)
+                                if err not in self.list_warn:
+                                    self.list_warn.append(err)
                                     print(err, dict_fund)
                                     logger_expo.debug((err, dict_fund))
                             else:
@@ -1096,16 +1093,16 @@ class FmtData:
                     err = 'unknown KQZJ name %s' % data_source
 
                     if flag_check_new_name and data_source not in (
-                            ['gf_tyt', 'zhaos_xtpb'] + gl.list_data_source_types_xtqmt_jjb
+                            ['gf_tyt', 'zhaos_xtpb'] + self.gl.list_data_source_types_xtqmt_jjb
                     ):
-                        if err not in list_warn:
-                            list_warn.append(err)
+                        if err not in self.list_warn:
+                            self.list_warn.append(err)
                             print(err, dict_fund)
                             logger_expo.debug((err, dict_fund))
 
                     dict_fund_fmtted = {
-                        'DataDate': gl.str_today,
-                        'UpdateTime': self.record_fmt_time,
+                        'DataDate': self.gl.str_today,
+                        'UpdateTime': str_updatetime,
                         'AcctIDByMXZ': acctidbymxz,
                         'DataSourceType': data_source,
                         'Cash': cash,
@@ -1113,16 +1110,16 @@ class FmtData:
                         'AvailableFund': avlfund,
                         'TotalAsset': ttasset,
                         'TotalLiability': total_liability,
-                        'KQZJ': kqzj  # 总股本*每股价值 = 证券市值, 之后补上
+                        'KQZJ': kqzj
                     }
                     list_dicts_fmtted.append(dict_fund_fmtted)
 
-            elif sheet_type == 'holding':  # holding
-                # 2.整理holding
+            elif sheet_type == 'holding':
                 # 2.1 rawdata(无融券合约账户)
                 list_dicts_holding = raw_list
 
-                for dict_holding in list_dicts_holding:  # 不必 list_dicts_holding.keys()
+                for dict_holding in list_dicts_holding:
+                    str_updatetime = dict_holding['UpdateTime']
                     secid = None
                     secidsrc = None
                     symbol = None
@@ -1135,8 +1132,8 @@ class FmtData:
                             flag_check_new_name = False
                     err = 'unknown secid name %s' % data_source
                     if flag_check_new_name:
-                        if err not in list_warn:
-                            list_warn.append(err)
+                        if err not in self.list_warn:
+                            self.list_warn.append(err)
                             print(err, dict_holding)
                             logger_expo.debug((err, dict_holding))
 
@@ -1154,15 +1151,15 @@ class FmtData:
                     for field_exchange in list_fields_exchange:
                         if field_exchange in dict_holding:
                             try:
-                                if data_source in dict_ambigu_secidsrc:
+                                if data_source in dict_ambiguous_secidsrc:
                                     digit_exchange = str(dict_holding[field_exchange])
-                                    secidsrc = dict_ambigu_secidsrc[data_source][digit_exchange]
+                                    secidsrc = dict_ambiguous_secidsrc[data_source][digit_exchange]
                                 else:
                                     exchange = dict_holding[field_exchange]
                                     secidsrc = dict_exchange2secidsrc[exchange]
                             except KeyError as err:
-                                if err not in list_warn:
-                                    list_warn.append(err)
+                                if err not in self.list_warn:
+                                    self.list_warn.append(err)
                                     print(err, dict_holding)
                                     logger_expo.debug((err, dict_holding))
                             flag_check_new_name = False
@@ -1171,8 +1168,8 @@ class FmtData:
                     err = 'unknown security source name %s' % data_source
                     if flag_check_new_name:
                         secidsrc = self.id2source.find_exchange(secid)
-                        if err not in list_warn:
-                            list_warn.append(err)
+                        if err not in self.list_warn:
+                            self.list_warn.append(err)
                             print(err, dict_holding)
                             logger_expo.warning(err)
 
@@ -1181,15 +1178,16 @@ class FmtData:
                         if field_symbol in dict_holding:
                             symbol = str(dict_holding[field_symbol])
                             flag_check_new_name = False
+
                     err = 'unknown symbol name %s' % data_source
                     if flag_check_new_name:
                         if data_source in (
-                                ['hait_ehfz_api', 'yh_apama', 'gf_tyt'] + gl.list_data_source_types_xtqmt_jjb
+                                ['hait_ehfz_api', 'yh_apama', 'gf_tyt'] + self.gl.list_data_source_types_xtqmt_jjb
                         ):
                             symbol = '???'
                         else:
-                            if err not in list_warn:
-                                list_warn.append(err)
+                            if err not in self.list_warn:
+                                self.list_warn.append(err)
                                 print(err, dict_holding)
                                 logger_expo.debug((err, dict_holding))
 
@@ -1201,8 +1199,8 @@ class FmtData:
 
                     err = 'unknown longqty name %s' % data_source
                     if flag_check_new_name:
-                        if err not in list_warn:
-                            list_warn.append(err)
+                        if err not in self.list_warn:
+                            self.list_warn.append(err)
                             print(err, dict_holding)
                             logger_expo.debug((err, dict_holding))
 
@@ -1212,15 +1210,15 @@ class FmtData:
 
                     # todo 若持仓中的股票代码不在华泰数据字典redis中，则按0元处理
                     if sectype in ['CS']:
-                        b_dict_md = server_redis_md.get(f'market_{windcode}')
+                        b_dict_md = self.server_redis_md.get(f'market_{windcode}')
 
                         if b_dict_md:
                             lastpx = orjson.loads(b_dict_md)['LastPx'] / 10000
                         else:
                             str_md_not_found = f'在行情redis中未找到{windcode}的行情数据'
-                            if str_md_not_found not in list_warn:
+                            if str_md_not_found not in self.list_warn:
                                 print(str_md_not_found)
-                                list_warn.append(str_md_not_found)
+                                self.list_warn.append(str_md_not_found)
                             lastpx = 0
                         longamt = lastpx * longqty
 
@@ -1233,8 +1231,8 @@ class FmtData:
                         longamt = None
 
                     dict_holding_fmtted = {
-                        'DataDate': gl.str_today,
-                        'UpdateTime': self.record_fmt_time,
+                        'DataDate': self.gl.str_today,
+                        'UpdateTime': str_updatetime,
                         'AcctIDByMXZ': acctidbymxz,
                         'DataSourceType': data_source,
                         'SecurityID': secid,
@@ -1261,6 +1259,7 @@ class FmtData:
                     avgpx = None
                     sernum = None
                     data_source = dict_order['DataSourceType']
+                    str_updatetime = dict_order['UpdateTime']
 
                     # todo 数据筛选器
                     if data_source in ['huat_matic_tsi']:
@@ -1274,8 +1273,8 @@ class FmtData:
                             flag_check_new_name = False
                     err = 'unknown secid name %s' % data_source
                     if flag_check_new_name:
-                        if err not in list_warn:
-                            list_warn.append(err)
+                        if err not in self.list_warn:
+                            self.list_warn.append(err)
                             print(err, dict_order)
                             logger_expo.debug((err, dict_order))
 
@@ -1292,15 +1291,15 @@ class FmtData:
                     for field_exchange in list_fields_exchange:
                         if field_exchange in dict_order:
                             try:
-                                if data_source in dict_ambigu_secidsrc:
+                                if data_source in dict_ambiguous_secidsrc:
                                     digit_exchange = dict_order[field_exchange]
-                                    secidsrc = dict_ambigu_secidsrc[data_source][digit_exchange]
+                                    secidsrc = dict_ambiguous_secidsrc[data_source][digit_exchange]
                                 else:
                                     exchange = dict_order[field_exchange]
                                     secidsrc = dict_exchange2secidsrc[exchange]
                             except KeyError as err:
-                                if err not in list_warn:
-                                    list_warn.append(err)
+                                if err not in self.list_warn:
+                                    self.list_warn.append(err)
                                     print(err, dict_order)
                                     logger_expo.debug(err, dict_order)
                             flag_check_new_name = False
@@ -1308,9 +1307,8 @@ class FmtData:
                     err = 'unknown security source name %s' % data_source
                     if flag_check_new_name:
                         secidsrc = self.id2source.find_exchange(secid)
-                        # print(f'{secid}的security source被判定为 {secidsrc}.')
-                        if err not in list_warn:
-                            list_warn.append(err)
+                        if err not in self.list_warn:
+                            self.list_warn.append(err)
                             print(err, dict_order)
                             logger_expo.warning(err)
 
@@ -1322,11 +1320,11 @@ class FmtData:
 
                     err = 'unknown symbol name %s' % data_source
                     if flag_check_new_name:
-                        if data_source in ['hait_ehfz_api', 'yh_apama', 'gf_tyt'] + gl.list_data_source_types_xtqmt_jjb:
+                        if data_source in ['hait_ehfz_api', 'yh_apama', 'gf_tyt'] + self.gl.list_data_source_types_xtqmt_jjb:
                             symbol = ''  # 这几个券商中没有提供symbol
                         else:
-                            if err not in list_warn:
-                                list_warn.append(err)
+                            if err not in self.list_warn:
+                                self.list_warn.append(err)
                                 print(err, dict_order)
                                 logger_expo.debug((err, dict_order))
 
@@ -1339,10 +1337,11 @@ class FmtData:
                         if field_cumqty in dict_order:
                             cumqty = dict_order[field_cumqty]
                             flag_check_new_name = False
+
                     err = 'unknown cumqty name %s' % data_source
                     if flag_check_new_name:
-                        if err not in list_warn:
-                            list_warn.append(err)
+                        if err not in self.list_warn:
+                            self.list_warn.append(err)
                             print(err, dict_order)
                             logger_expo.debug((err, dict_order))
 
@@ -1357,8 +1356,8 @@ class FmtData:
                         if data_source in ['yh_apama']:
                             pass
                         else:
-                            if err not in list_warn:
-                                list_warn.append(err)
+                            if err not in self.list_warn:
+                                self.list_warn.append(err)
                                 print(err, dict_order)
                                 logger_expo.debug((err, dict_order))
 
@@ -1375,9 +1374,9 @@ class FmtData:
                         flag_check_new_name = True
                         for field_side in list_fields_side:
                             if field_side in dict_order:
-                                if data_source in dict_ambigu_side_name:
+                                if data_source in dict_ambiguous_side_name:
                                     digit_side = dict_order[field_side]
-                                    side = dict_ambigu_side_name[data_source][digit_side]
+                                    side = dict_ambiguous_side_name[data_source][digit_side]
                                 else:
                                     str_side = dict_order[field_side]
                                     side = dict_fmtted_side_name[str_side]
@@ -1385,8 +1384,8 @@ class FmtData:
 
                     err = 'unknown side name %s' % data_source
                     if flag_check_new_name:
-                        if err not in list_warn:
-                            list_warn.append(err)
+                        if err not in self.list_warn:
+                            self.list_warn.append(err)
                             print(err, dict_order)
                             logger_expo.debug((err, dict_order))
 
@@ -1397,8 +1396,8 @@ class FmtData:
                             flag_check_new_name = False
                     err = 'unknown orderqty name %s' % data_source
                     if flag_check_new_name:
-                        if err not in list_warn:
-                            list_warn.append(err)
+                        if err not in self.list_warn:
+                            self.list_warn.append(err)
                             print(err, dict_order)
                             logger_expo.debug((err, dict_order))
 
@@ -1410,23 +1409,23 @@ class FmtData:
                             datetime_obj = None
                             for time_format in list_time_format:
                                 try:
-                                    datetime_obj = datetime.datetime.strptime(transtime, time_format)
+                                    datetime_obj = datetime.strptime(transtime, time_format)
                                 except ValueError:
                                     pass
                             if datetime_obj:
                                 transtime = datetime_obj.strftime('%H%M%S')
                             else:
                                 err = 'unknown transtime format %s' % data_source
-                                if err not in list_warn:
-                                    list_warn.append(err)
+                                if err not in self.list_warn:
+                                    self.list_warn.append(err)
                                     print(err, dict_order)
                                     logger_expo.debug((err, dict_order))
                             flag_check_new_name = False
 
                     err = 'unknown transaction time name %s' % data_source
                     if flag_check_new_name:
-                        if err not in list_warn:
-                            list_warn.append(err)
+                        if err not in self.list_warn:
+                            self.list_warn.append(err)
                             print(err, dict_order)
                             logger_expo.debug((err, dict_order))
 
@@ -1437,8 +1436,8 @@ class FmtData:
                             flag_check_new_name = False
                     err = 'unknown serial number name %s' % data_source
                     if flag_check_new_name:
-                        if err not in list_warn:
-                            list_warn.append(err)
+                        if err not in self.list_warn:
+                            self.list_warn.append(err)
                             print(err, dict_order)
                             logger_expo.debug((err, dict_order))
 
@@ -1449,14 +1448,14 @@ class FmtData:
                             flag_check_new_name = False
                     err = 'unknown average price name %s' % data_source
                     if flag_check_new_name:
-                        if err not in list_warn:
-                            list_warn.append(err)
+                        if err not in self.list_warn:
+                            self.list_warn.append(err)
                             print(err, dict_order)
                             logger_expo.debug((err, dict_order))
 
                     dict_order_fmtted = {
-                        'DataDate': gl.str_today,
-                        'UpdateTime': self.record_fmt_time,
+                        'DataDate': self.gl.str_today,
+                        'UpdateTime': str_updatetime,
                         'AcctIDByMXZ': acctidbymxz,
                         'DataSourceType': data_source,
                         'SecurityID': secid,
@@ -1480,7 +1479,6 @@ class FmtData:
                     secid = None
                     secidsrc = None
                     symbol = None
-                    # longqty = 0
                     shortqty = 0
                     contractstatus = None
                     contracttype = None
@@ -1489,6 +1487,7 @@ class FmtData:
                     sernum = None
                     compositesrc = None
                     data_source = dict_secloan['DataSourceType']
+                    str_updatetime = dict_secloan['UpdateTime']
 
                     flag_check_new_name = True
                     for field_secid in list_fields_secid:
@@ -1497,8 +1496,8 @@ class FmtData:
                             flag_check_new_name = False
                     err = 'unknown field_secid name %s' % data_source
                     if flag_check_new_name:
-                        if err not in list_warn:
-                            list_warn.append(err)
+                        if err not in self.list_warn:
+                            self.list_warn.append(err)
                             print(err, dict_secloan)
                             logger_expo.debug((err, dict_secloan))
 
@@ -1517,15 +1516,15 @@ class FmtData:
                     for field_exchange in list_fields_exchange:
                         if field_exchange in dict_secloan:
                             try:
-                                if data_source in dict_ambigu_secidsrc:
+                                if data_source in dict_ambiguous_secidsrc:
                                     digit_exchange = dict_secloan[field_exchange]
-                                    secidsrc = dict_ambigu_secidsrc[data_source][digit_exchange]
+                                    secidsrc = dict_ambiguous_secidsrc[data_source][digit_exchange]
                                 else:
                                     exchange = dict_secloan[field_exchange]
                                     secidsrc = dict_exchange2secidsrc[exchange]
                             except KeyError as err:
-                                if err not in list_warn:
-                                    list_warn.append(err)
+                                if err not in self.list_warn:
+                                    self.list_warn.append(err)
                                     print(err, dict_secloan)
                                     logger_expo.debug(err, dict_secloan)
                             flag_check_new_name = False
@@ -1533,8 +1532,8 @@ class FmtData:
                     err = 'unknown security source name %s' % data_source
                     if flag_check_new_name:
                         secidsrc = self.id2source.find_exchange(secid)
-                        if err not in list_warn:
-                            list_warn.append(err)
+                        if err not in self.list_warn:
+                            self.list_warn.append(err)
                             print(err, dict_secloan)
                             logger_expo.warning(err)
 
@@ -1545,8 +1544,8 @@ class FmtData:
                             flag_check_new_name = False
                     err = 'unknown field symbol name %s' % data_source
                     if flag_check_new_name:
-                        if err not in list_warn:
-                            list_warn.append(err)
+                        if err not in self.list_warn:
+                            self.list_warn.append(err)
                             print(err, dict_secloan)
                             logger_expo.debug((err, dict_secloan))
 
@@ -1557,8 +1556,8 @@ class FmtData:
                             flag_check_new_name = False
                     err = 'unknown field shortqty name %s' % data_source
                     if flag_check_new_name:
-                        if err not in list_warn:
-                            list_warn.append(err)
+                        if err not in self.list_warn:
+                            self.list_warn.append(err)
                             print(err, dict_secloan)
                             logger_expo.debug((err, dict_secloan))
 
@@ -1569,8 +1568,8 @@ class FmtData:
                         flag_check_new_name = False
                     err = 'unknown field contractqty name %s' % data_source
                     if flag_check_new_name:
-                        if err not in list_warn:
-                            list_warn.append(err)
+                        if err not in self.list_warn:
+                            self.list_warn.append(err)
                             print(err, dict_secloan)
                             logger_expo.debug((err, dict_secloan))
 
@@ -1581,8 +1580,8 @@ class FmtData:
                             flag_check_new_name = False
                     err = 'unknown field serum name %s' % data_source
                     if flag_check_new_name:
-                        if err not in list_warn:
-                            list_warn.append(err)
+                        if err not in self.list_warn:
+                            self.list_warn.append(err)
                             print(err, dict_secloan)
                             logger_expo.debug((err, dict_secloan))
 
@@ -1623,22 +1622,22 @@ class FmtData:
                             # 和order共用 date格式
                             for date_format in list_date_format:
                                 try:
-                                    datetime_obj = datetime.datetime.strptime(opdate, date_format)
+                                    datetime_obj = datetime.strptime(opdate, date_format)
                                 except ValueError:
                                     pass
                             if datetime_obj:
                                 opdate = datetime_obj.strftime('%Y%m%d')
                             else:
                                 err = 'Unrecognized trade date format %s' % data_source
-                                if err not in list_warn:
-                                    list_warn.append(err)
+                                if err not in self.list_warn:
+                                    self.list_warn.append(err)
                                     print(err, dict_secloan)
                                     logger_expo.debug((err, dict_secloan))
 
                     if flag_check_new_name:
                         err = 'unknown field opdate name %s' % data_source
-                        if err not in list_warn:
-                            list_warn.append(err)
+                        if err not in self.list_warn:
+                            self.list_warn.append(err)
                             print(err, dict_secloan)
                             logger_expo.debug((err, dict_secloan))
 
@@ -1649,8 +1648,8 @@ class FmtData:
                             flag_check_new_name = False
                     if flag_check_new_name and list_fields_compositesrc:
                         err = 'unknown field_compositesrc name %s' % data_source
-                        if err not in list_warn:
-                            list_warn.append(err)
+                        if err not in self.list_warn:
+                            self.list_warn.append(err)
                             print(err, dict_secloan)
                             logger_expo.debug((err, dict_secloan))
 
@@ -1659,7 +1658,7 @@ class FmtData:
                     sectype = get_sectype_from_code(windcode)
 
                     if sectype in ['CS']:
-                        lastpx = orjson.loads(server_redis_md.get(f"market_{windcode}"))['LastPx'] / 10000
+                        lastpx = orjson.loads(self.server_redis_md.get(f"market_{windcode}"))['LastPx'] / 10000
                         shortamt = lastpx * shortqty
 
                     elif sectype in ['MMF']:
@@ -1669,16 +1668,16 @@ class FmtData:
                         shortamt = None
 
                     dict_secloan_fmtted = {
-                        'DataDate': gl.str_today,
+                        'DataDate': self.gl.str_today,
                         'AcctIDByMXZ': acctidbymxz,
                         'DataSourceType': data_source,
-                        'UpdateTime': self.record_fmt_time,
+                        'UpdateTime': str_updatetime,
                         'SecurityID': secid,
                         'SecurityType': sectype,
                         'Symbol': symbol,
                         'SecurityIDSource': secidsrc,
                         'SerialNumber': sernum,
-                        'OpenPositionDate': opdate,  # = tradeDate？loan是交易吗？感觉FIX里是
+                        'OpenPositionDate': opdate,  # Not Important
                         'ContractStatus': contractstatus,
                         'ContractType': contracttype,
                         'ContractQty': contractqty,
@@ -1691,22 +1690,108 @@ class FmtData:
                 raise ValueError('Unknown f_h_o_s_mark')
 
         elif accttype in ['f'] and patchpath is None:
-            list_dicts_future_fund = raw_list
-            for dict_fund_future in list_dicts_future_fund:
-                cash = dict_fund_future['DYNAMICBALANCE']
-                acctidbymxz = dict_fund_future['AcctIDByMXZ']
-                kyzj = dict_fund_future['USABLECURRENT']
-                dict_future_fund_fmtted = {
-                    'DataDate': gl.str_today,
-                    'UpdateTime': self.record_fmt_time,
-                    'AcctIDByMXZ': acctidbymxz,
-                    'DataSourceType': 'trader_api',
-                    'Cash': cash,
-                    'NetAsset': cash,
-                    'AvailableFund': kyzj,
-                }
-                list_dicts_fmtted.append(dict_future_fund_fmtted)
-            # todo 期货的合约直接放到 position, 双向(其实holding应该抽象为long_position)。
+            if sheet_type == 'fund':
+                list_dicts_future_fund = raw_list
+                for dict_fund_future in list_dicts_future_fund:
+                    str_updatetime = dict_fund_future['UpdateTime']
+                    cash = dict_fund_future['DYNAMICBALANCE']
+                    acctidbymxz = dict_fund_future['AcctIDByMXZ']
+                    kyzj = dict_fund_future['USABLECURRENT']
+                    dict_future_fund_fmtted = {
+                        'DataDate': self.gl.str_today,
+                        'UpdateTime': str_updatetime,
+                        'AcctIDByMXZ': acctidbymxz,
+                        'DataSourceType': 'trader_api',
+                        'Cash': cash,
+                        'NetAsset': cash,
+                        'TotalAsset': cash,
+                        'AvailableFund': kyzj,
+                    }
+                    list_dicts_fmtted.append(dict_future_fund_fmtted)
+                # todo 期货的合约直接放到 position, 双向(其实holding应该抽象为long_position)。
+
+            elif sheet_type == 'holding':
+                list_dicts_future_holding = raw_list
+                for dict_holding_future in list_dicts_future_holding:
+                    str_updatetime = dict_holding_future['UpdateTime']
+                    secid = dict_holding_future['instrument_id']
+                    secidsrc = dict_holding_future['exchange']
+
+                    if secid[:-4] in ['IC', 'IF', 'IH']:
+                        sectype = 'IndexFuture'
+                        windcode = self.gl.dict_future2spot[secid[:-4]]
+                        lastpx = orjson.loads(self.server_redis_md.get(f'index_{windcode}'))['LastIndex'] / 10000
+
+                    else:
+                        sectype = 'CommodityFuture'
+                        windcode = f'{secid}.{secidsrc}'
+                        # todo
+                        lastpx = orjson.loads(self.server_redis_md.get(f'market_{windcode}'))['LastPrice'] / 10000
+
+                    multiplier = self.gl.dict_future2multiplier[secid[:-4]]
+                    acctidbymxz = dict_holding_future['AcctIDByMXZ']
+                    direction = dict_holding_future['direction']
+                    if direction in ['buy']:
+                        longqty = dict_holding_future['position']
+                        longamt = longqty * lastpx * multiplier
+                        dict_holding_fmtted = {
+                            'DataDate': self.gl.str_today,
+                            'UpdateTime': str_updatetime,
+                            'AcctIDByMXZ': acctidbymxz,
+                            'DataSourceType': 'trader_api',
+                            'SecurityID': secid,
+                            'SecurityType': sectype,
+                            'Symbol': '',
+                            'SecurityIDSource': secidsrc,
+                            'LastPx': lastpx,
+                            'LongQty': longqty,
+                            'LongAmt': longamt,
+                        }
+                        list_dicts_fmtted.append(dict_holding_fmtted)
+
+            elif sheet_type in ['order']:
+                pass
+
+            elif sheet_type == 'short_position':
+                list_dicts_future_short_position = raw_list
+                for dict_holding_future_short_position in list_dicts_future_short_position:
+                    str_updatetime = dict_holding_future_short_position['UpdateTime']
+                    acctidbymxz = dict_holding_future_short_position['AcctIDByMXZ']
+                    direction = dict_holding_future_short_position['direction']
+                    secid = dict_holding_future_short_position['instrument_id']
+                    secidsrc = dict_holding_future_short_position['exchange']
+
+                    if secid[:-4] in ['IC', 'IF', 'IH']:
+                        sectype = 'IndexFuture'
+                        windcode = self.gl.dict_future2spot[secid[:-4]]
+                        lastpx = orjson.loads(self.server_redis_md.get(f'index_{windcode}'))['LastIndex'] / 10000
+                        multiplier = self.gl.dict_future2multiplier[secid[:-4]]
+
+                    else:
+                        sectype = 'CommodityFuture'
+                        windcode = f'{secid}.{secidsrc}'
+                        lastpx = orjson.loads(self.server_redis_md.get(f'market_{windcode}')['LastPrice']) / 10000
+                        multiplier = self.gl.dict_future2multiplier[secid[:-4]]
+
+                    if direction in ['sell']:
+                        shortqty = dict_holding_future_short_position['position']
+                        shortamt = shortqty * lastpx * multiplier
+                        dict_trddata_fmtted_short_position = {
+                            'DataDate': self.gl.str_today,
+                            'UpdateTime': str_updatetime,
+                            'AcctIDByMXZ': acctidbymxz,
+                            'DataSourceType': 'trader_api',
+                            'SecurityID': secid,
+                            'SecurityType': sectype,
+                            'Symbol': '',
+                            'SecurityIDSource': secidsrc,
+                            'LastPx': lastpx,
+                            'ShortQty': shortqty,
+                            'ShortAmt': shortamt,
+                        }
+                        list_dicts_fmtted.append(dict_trddata_fmtted_short_position)
+            else:
+                raise ValueError('Unknown sheet type.')
 
         elif patchpath:
             if accttype == 'o':
@@ -1717,457 +1802,431 @@ class FmtData:
                 df = df.where(df.notnull(), None)
                 for i, row in df.iterrows():
                     doc = dict(row)
-                    doc['UpdateTime'] = self.record_fmt_time
-                    doc['DataDate'] = gl.str_today
+                    doc['UpdateTime'] = datetime.now().strftime('%H%M%S')
+                    doc['DataDate'] = self.gl.str_today
                     list_dicts_fmtted.append(doc)
-
         else:
             logger_expo.debug('Unknown account type in basic account info.')
         return list_dicts_fmtted
 
-    def update_fmtdata(self):
-        self.record_fmt_time = datetime.datetime.today().strftime('%H%M%S')
-        self.record_update_raw_time = gl.col_trade_glv.find_one({'DataDate': gl.str_today})['RawUpdateTime']
-        dict_acct2patch = {}
-        for _ in gl.col_datapatch.find({'DataDate': gl.str_today}):
-            acctid = _['AcctIDByMXZ']
-            if acctid in dict_acct2patch:
-                dict_acct2patch[acctid].append(_)
-            else:
-                dict_acct2patch[acctid] = [_]
+    def update_trdfmt_cmfo(self):
+        while True:
+            dict_acct2patch = {}
+            for _ in self.gl.col_datapatch.find({'DataDate': self.gl.str_today}):
+                acctid = _['AcctIDByMXZ']
+                if acctid in dict_acct2patch:
+                    dict_acct2patch[acctid].append(_)
+                else:
+                    dict_acct2patch[acctid] = [_]
 
-        dict_raw_col = {
-            'future': {
-                'fund': gl.col_trade_rawdata_fund,
-                'holding': gl.col_trade_rawdata_holding,
-            },
-            'stock': {
-                'fund': gl.col_trade_rawdata_fund,
-                'holding': gl.col_trade_rawdata_holding,
-                'order': gl.col_trade_rawdata_order,
-                'short_position': gl.col_trade_rawdata_short_position
+            dict_sheet_type2col = {
+                'fund': self.gl.col_trade_rawdata_fund,
+                'holding': self.gl.col_trade_rawdata_holding,
+                'order': self.gl.col_trade_rawdata_order,
+                'short_position': self.gl.col_trade_rawdata_short_position
             }
-        }
 
-        dict_fmt_col = {
-            'fund': gl.col_trade_fmtdata_fund,
-            'holding': gl.col_trade_fmtdata_holding,
-            'order': gl.col_trade_fmtdata_order,
-            'short_position': gl.col_trade_fmtdata_short_position
-        }
+            dict_fmt_col = {
+                'fund': self.gl.col_trade_fmtdata_fund,
+                'holding': self.gl.col_trade_fmtdata_holding,
+                'order': self.gl.col_trade_fmtdata_order,
+                'short_position': self.gl.col_trade_fmtdata_short_position
+            }
 
-        dict3d_acctid2rawList = {'future': {}, 'stock': {}}
-        for general_type in dict_raw_col:
-            for sheet_type in dict_raw_col[general_type]:
-                col = dict_raw_col[general_type][sheet_type]
-                dict_acctid2rawList = {}
-                for _ in col.find({'DataDate': gl.str_today}):
-                    acctid = _["AcctIDByMXZ"]
-                    if acctid in dict_acctid2rawList:
-                        dict_acctid2rawList[acctid].append(_)
+            # todo 将future账户视为股票账户，重构
+            dict_sheet_type2dict_acctidbymxz2list_dicts_trdraw = {}
+            for sheet_type in dict_sheet_type2col:
+                col = dict_sheet_type2col[sheet_type]
+                dict_acctidbymxz2list_dicts_trdraw = {}
+                for dict_trdraw in col.find({'DataDate': self.gl.str_today}, {'_id': 0}):
+                    acctidbymxz = dict_trdraw["AcctIDByMXZ"]
+                    if acctidbymxz in dict_acctidbymxz2list_dicts_trdraw:
+                        dict_acctidbymxz2list_dicts_trdraw[acctidbymxz].append(dict_trdraw)
                     else:
-                        dict_acctid2rawList[acctid] = [_]
-                dict3d_acctid2rawList[general_type].update({sheet_type: dict_acctid2rawList})
+                        dict_acctidbymxz2list_dicts_trdraw[acctidbymxz] = [dict_trdraw]
+                dict_sheet_type2dict_acctidbymxz2list_dicts_trdraw.update({sheet_type: dict_acctidbymxz2list_dicts_trdraw})
 
-        dict_shtype2listFmtted = {'fund': [], 'holding': [], 'order': [], 'short_position': []}
-        for dict_acctinfo in gl.col_acctinfo.find(
-                {'DataDate': gl.str_today, 'DataDownloadMark': 1}, {'_id': 0}
-        ):
-            acctidbymxz = dict_acctinfo['AcctIDByMXZ']
-            accttype = dict_acctinfo['AcctType']
-            general_type = {'f': 'future', 'c': 'stock', 'm': 'stock', 'o': 'stock'}[accttype]
-            patchpaths = {}
-            if dict_acctinfo['PatchMark'] == '1':
-                for _ in dict_acct2patch[acctidbymxz]:
-                    patchpaths[_['SheetName']] = _['DataFilePath']
-
-            for sheet_type in dict3d_acctid2rawList[general_type].keys():
-                if sheet_type in patchpaths:
-                    patchpath = patchpaths[sheet_type]
-                else:
-                    patchpath = None
-                # 有patch就不从数据库里取
-                if acctidbymxz in dict3d_acctid2rawList[general_type][sheet_type] and patchpath is None:
-                    raw_list = dict3d_acctid2rawList[general_type][sheet_type][acctidbymxz]
-                elif patchpath:
-                    raw_list = None
-                else:
-                    continue
-                # Note3. raw_list  {stock:{fund:{acctid: [准备format的list]}}}里的 ‘准备format的list’
-                list_dicts_fmtted = self.formulate_raw_data(acctidbymxz, accttype, patchpath, sheet_type, raw_list)
-                dict_shtype2listFmtted[sheet_type] += list_dicts_fmtted
-
-        for sheet_type in dict_shtype2listFmtted:
-            list_dicts_fmtted = dict_shtype2listFmtted[sheet_type]
-            # todo short_position
-            target_collection = dict_fmt_col[sheet_type]
-            if list_dicts_fmtted:
-                # 默认record_fmt_time是新时间
-                target_collection.insert_many(list_dicts_fmtted)
-        gl.col_trade_glv.update_one({'DataDate': gl.str_today}, {'$set': {
-            'RawFinished': False, 'FmtFinished': True, 'FmtUpdateTime': self.record_fmt_time}})
-        return
-
-    def run(self):
-        fmt_threading = threading.Thread(target=self.update_fmtdata)
-        fmt_threading.start()
-
-
-class Position:
-    def __init__(self):
-        gl = Globals()
-        self.record_fmt_time = None
-        self.record_position_time = None
-        self.id2source = ID2Source(gl.db_basicinfo, 'data/security_id.xlsx')
-
-        self.dict_future2multiplier = {'IC': 200, 'IH': 300, 'IF': 300}
-        self.dict_future2spot = {'IC': '000905.SH', 'IH': '000016.SH', 'IF': '000300'}
-
-        self.warn_list = []
-        self.event = threading.Event()
-        self.lock = threading.Lock()
-
-    def update_position(self):
-        self.record_fmt_time = gl.col_trade_glv.find_one({'DataDate': gl.str_today})['FmtUpdateTime']
-        list_dicts_position = []  # 取名改改...
-        set_windcode_to_search = set()  # 防止重复
-        dict_id2info = {}
-        dict_pair2allcol = {}  # 为了只遍历一遍各个表格，不然特别慢！
-        dict_learn_secid2src = {}  # 有的post里面没有source，得用fmt里的“学”
-
-        for dict_acctinfo in gl.col_acctinfo.find({'DataDate': gl.str_today, 'DataDownloadMark': 1}):
-            acctidbymxz = dict_acctinfo['AcctIDByMXZ']
-            accttype = dict_acctinfo['AcctType']
-            patchmark = dict_acctinfo['PatchMark']
-            data_source = dict_acctinfo['DataSourceType']
-            dict_id2info.update({acctidbymxz: [accttype, patchmark, data_source]})
-
-        # Note4. pair作用： 相同的acctid, 证券对应唯一的position，但是holding，合约，order可能不止一个
-        # 存成字典dict_pair2allcol： {pair: {holding:[...], order:[...], secloan: []},之后遍历每一个key
-        # Note4. 有时候计算错误（实际持仓和计算的持仓不一样）的原因是市场错了 idsrc分错导致应该当成一个票子的没合并
-        # Note4. 上面的dict_id2info作用在于把acctinfo拍扁成dict，pair -> acctid -> 账户信息
-        for col_name in ['trade_formatted_data_order', 'trade_formatted_data_holding']:
-            for _ in gl.db_trade_data[col_name].find(
-                {'DataDate': gl.str_today, 'UpdateTime': self.record_fmt_time}
+            dict_shtype2listfmtted = {'fund': [], 'holding': [], 'order': [], 'short_position': []}
+            for dict_acctinfo in self.gl.col_acctinfo.find(
+                    {'DataDate': self.gl.str_today, 'DataDownloadMark': 1}, {'_id': 0}
             ):
-                sid = _['SecurityID']
-                idsrc = _['SecurityIDSource']
-                pair = (_['AcctIDByMXZ'], sid, idsrc, _['SecurityType'])
-                if sid in dict_learn_secid2src:
-                    if dict_learn_secid2src[sid] != idsrc:
-                        dict_learn_secid2src[sid] = None  # 感觉得改改
-                else:
-                    dict_learn_secid2src.update({sid: idsrc})
+                acctidbymxz = dict_acctinfo['AcctIDByMXZ']
+                accttype = dict_acctinfo['AcctType']
+                patchpaths = {}
+                if dict_acctinfo['PatchMark']:
+                    for _ in dict_acct2patch[acctidbymxz]:
+                        patchpaths[_['SheetName']] = _['DataFilePath']
 
-                # set_pair_secid = set_pair_secid | {pair}  # 并集
-                all_doc = _.copy()
-                if pair in dict_pair2allcol:
-                    if col_name in dict_pair2allcol[pair]:
-                        dict_pair2allcol[pair][col_name].append(all_doc)
+                for sheet_type in dict_sheet_type2dict_acctidbymxz2list_dicts_trdraw.keys():
+                    if sheet_type in patchpaths:
+                        patchpath = patchpaths[sheet_type]
                     else:
-                        dict_pair2allcol[pair].update({col_name: [all_doc]})
-                else:
-                    dict_pair2allcol.update({pair: {col_name: [all_doc]}})
+                        patchpath = None
 
-        # post_col_name = ['fmtdata_holding', 'fmtdata_secloan']
-        for col_name in ['post_trade_formatted_data_holding', 'post_trade_formatted_data_short_position']:
-            for _ in gl.db_post_trade_data[col_name].find({'DataDate': gl.str_today}):
-                if 'SecurityType' not in _:  # 老版post里无IDSource...
-                    if 'SecurityIDSource' not in _:
-                        sid = _['SecurityID']
-                        if sid in dict_learn_secid2src:
-                            _['SecurityIDSource'] = dict_learn_secid2src[sid]
+                    # 有patch就不从数据库里取
+                    if acctidbymxz in dict_sheet_type2dict_acctidbymxz2list_dicts_trdraw[sheet_type] and patchpath is None:
+                        raw_list = dict_sheet_type2dict_acctidbymxz2list_dicts_trdraw[sheet_type][acctidbymxz]
+                    elif patchpath:
+                        raw_list = None
+                    else:
+                        continue
+
+                    # Note3. raw_list  {stock:{fund:{acctid: [准备format的list]}}}里的 ‘准备format的list’
+                    list_dicts_fmtted = self.formulate_raw_data(acctidbymxz, accttype, patchpath, sheet_type, raw_list)
+                    dict_shtype2listfmtted[sheet_type] += list_dicts_fmtted
+
+            for sheet_type in dict_shtype2listfmtted:
+                list_dicts_fmtted = dict_shtype2listfmtted[sheet_type]
+                col_2b_inserted = dict_fmt_col[sheet_type]
+                if list_dicts_fmtted:
+                    col_2b_inserted.delete_many({'DataDate': self.gl.str_today})
+                    col_2b_inserted.insert_many(list_dicts_fmtted)
+            print('Update formatted data finished.')
+            time.sleep(5)
+            
+    def update_position(self):
+        while True:
+            list_dicts_position = []
+            dict_id2info = {}
+            dict_pair2allcol = {}
+            # 存成字典dict_pair2allcol： {pair: {holding:[...], order:[...], secloan: []},之后遍历每一个key
+            dict_learn_secid2src = {}  # 有的post里面没有source，得用fmt里的“学”
+
+            for dict_acctinfo in self.gl.col_acctinfo.find({'DataDate': self.gl.str_today, 'DataDownloadMark': 1}):
+                acctidbymxz = dict_acctinfo['AcctIDByMXZ']
+                accttype = dict_acctinfo['AcctType']
+                patchmark = dict_acctinfo['PatchMark']
+                data_source = dict_acctinfo['DataSourceType']
+                dict_id2info.update({acctidbymxz: [accttype, patchmark, data_source]})
+
+            # Note4. pair作用： 相同的acctid, 证券对应唯一的position，但是holding，合约，order可能不止一个
+            # Note4. 上面的dict_id2info作用在于把acctinfo拍扁成dict，pair -> acctid -> 账户信息
+
+            for col_name in ['trade_formatted_data_order', 'trade_formatted_data_holding']:
+                for dict_trade_data in self.gl.db_trade_data[col_name].find(
+                        {'DataDate': self.gl.str_today}, {'_id': 0}
+                ):
+                    secid = dict_trade_data['SecurityID']
+                    secidsrc = dict_trade_data['SecurityIDSource']
+                    acctidbymxz = dict_trade_data['AcctIDByMXZ']
+
+                    sectype = dict_trade_data['SecurityType']
+                    tuple_pair = (acctidbymxz, secid, secidsrc, sectype)
+
+                    if secid in dict_learn_secid2src:
+                        if dict_learn_secid2src[secid] != secidsrc:
+                            dict_learn_secid2src[secid] = None
+                    else:
+                        dict_learn_secid2src.update({secid: secidsrc})
+
+                    dict_trade_data_copy = dict_trade_data.copy()
+                    if tuple_pair in dict_pair2allcol:
+                        if col_name in dict_pair2allcol[tuple_pair]:
+                            dict_pair2allcol[tuple_pair][col_name].append(dict_trade_data_copy)
                         else:
-                            _['SecurityIDSource'] = self.id2source.find_exchange(sid)  # 因为可能要回答问题所以尽量不做
-                    windcode_suffix = {'SZSE': '.SZ', 'SSE': '.SH'}[_['SecurityIDSource']]
-                    _['SecurityType'] = get_sectype_from_code(_['SecurityID'] + windcode_suffix)
-                pair = (_['AcctIDByMXZ'], _['SecurityID'], _['SecurityIDSource'], _['SecurityType'])
-                # set_pair_secid = set_pair_secid | {pair}  # 并集
-                all_doc = _.copy()
-                if pair in dict_pair2allcol:
-                    if col_name in dict_pair2allcol[pair]:
-                        dict_pair2allcol[pair][col_name].append(all_doc)
+                            dict_pair2allcol[tuple_pair].update({col_name: [dict_trade_data_copy]})
                     else:
-                        dict_pair2allcol[pair].update({col_name: [all_doc]})
-                else:
-                    dict_pair2allcol.update({pair: {col_name: [all_doc]}})
+                        dict_pair2allcol.update({tuple_pair: {col_name: [dict_trade_data_copy]}})
 
-        for col_name in ['trade_future_api_holding']:
-            list_to_add = list(gl.db_post_trade_data[col_name].find({'DataDate': gl.str_today}))
-            for _ in list_to_add:
-                pair = (_['AcctIDByMXZ'], _['instrument_id'], _['exchange'])
-                all_doc = _.copy()
-                if pair in dict_pair2allcol:
-                    if col_name in dict_pair2allcol[pair]:
-                        dict_pair2allcol[pair][col_name].append(all_doc)
+            for col_name in ['post_trade_formatted_data_short_position']:
+                for dict_post_trade_data_last_trddate in self.gl.db_post_trade_data[col_name].find(
+                        {'DataDate': self.gl.str_last_trddate}, {'_id': 0}
+                ):
+                    acctidbymxz = dict_post_trade_data_last_trddate['AcctIDByMXZ']
+                    secid = dict_post_trade_data_last_trddate['SecurityID']
+                    secidsrc = dict_post_trade_data_last_trddate['SecurityIDSource']
+                    sectype = dict_post_trade_data_last_trddate['SecurityType']
+
+                    if 'SecurityType' not in dict_post_trade_data_last_trddate:
+                        if 'SecurityIDSource' not in dict_post_trade_data_last_trddate:
+                            secid = dict_post_trade_data_last_trddate['SecurityID']
+                            if secid in dict_learn_secid2src:
+                                dict_post_trade_data_last_trddate['SecurityIDSource'] = dict_learn_secid2src[secid]
+                            else:
+                                dict_post_trade_data_last_trddate['SecurityIDSource'] = self.id2source.find_exchange(secid)
+                        windcode_suffix = {'SZSE': '.SZ', 'SSE': '.SH'}[dict_post_trade_data_last_trddate['SecurityIDSource']]
+                        dict_post_trade_data_last_trddate['SecurityType'] = get_sectype_from_code(
+                            dict_post_trade_data_last_trddate['SecurityID'] + windcode_suffix
+                        )
+                    tuple_pair = (acctidbymxz, secid, secidsrc, sectype)
+
+                    dict_post_trade_data_last_trddate_copy = dict_post_trade_data_last_trddate.copy()
+                    if tuple_pair in dict_pair2allcol:
+                        if col_name in dict_pair2allcol[tuple_pair]:
+                            dict_pair2allcol[tuple_pair][col_name].append(dict_post_trade_data_last_trddate_copy)
+                        else:
+                            dict_pair2allcol[tuple_pair].update({col_name: [dict_post_trade_data_last_trddate_copy]})
                     else:
-                        dict_pair2allcol[pair].update({col_name: [all_doc]})
-                else:
-                    dict_pair2allcol.update({pair: {col_name: [all_doc]}})
+                        dict_pair2allcol.update({tuple_pair: {col_name: [dict_post_trade_data_last_trddate_copy]}})
 
-        for pair in dict_pair2allcol:  # or pair in dict_pair2allcol.keys()
-            acctidbymxz = pair[0]
-            secid = pair[1]
-            # if acctidbymxz == '3033_m_yh_5930' and secid == '510500':
-            #     print(end='')
-            secidsrc = pair[2]
-            sectype = None
+            # 注: 此处只使用了 short position中的期货数据，margin account 不用short_position.
+            for col_name in ['trade_formatted_data_short_position']:
+                for dict_trade_data in self.gl.db_trade_data[col_name].find(
+                        {'DataDate': self.gl.str_today}, {'_id': 0}
+                ):
+                    secid = dict_trade_data['SecurityID']
+                    secidsrc = dict_trade_data['SecurityIDSource']
+                    acctidbymxz = dict_trade_data['AcctIDByMXZ']
+                    accttype = acctidbymxz.split('_')[1]
+                    sectype = dict_trade_data['SecurityType']
 
-            try:
-                accttype, patchmark, data_source = dict_id2info[acctidbymxz]
-            except KeyError:
-                continue
-            try:
-                list_dicts_holding = dict_pair2allcol[pair]['trade_fmtdata_holding']
-            except KeyError:  # pair may not has 'fmtdata_holding' etc key
-                list_dicts_holding = []
-            try:
-                list_dicts_post_holding = dict_pair2allcol[pair]['post_trade_fmtdata_holding']
-            except KeyError:  # pair may not has 'fmtdata_holding' etc key
-                list_dicts_post_holding = []
-            try:
-                list_dicts_secloan = dict_pair2allcol[pair]['trade_fmtdata_secloan']
-            except KeyError:  # pair may not has 'fmtdata_holding' etc key
-                list_dicts_secloan = []
-            try:
-                list_dicts_post_secloan = dict_pair2allcol[pair]['post_trade_fmtdata_secloan']
-            except KeyError:  # pair may not has 'fmtdata_holding' etc key
-                list_dicts_post_secloan = []
-            try:
-                list_dicts_order = dict_pair2allcol[pair]['trade_fmtdata_order']
-            except KeyError:  # pair may not has 'fmtdata_holding' etc key
-                list_dicts_order = []
-            try:
-                list_dicts_holding_future = dict_pair2allcol[pair]['trade_future_api_holding']
-            except KeyError:  # pair may not has 'fmtdata_holding' etc key
-                list_dicts_holding_future = []
+                    if accttype in ['f']:
+                        tuple_pair = (acctidbymxz, secid, secidsrc, sectype)
+                        if secid in dict_learn_secid2src:
+                            if dict_learn_secid2src[secid] != secidsrc:
+                                dict_learn_secid2src[secid] = None
+                        else:
+                            dict_learn_secid2src.update({secid: secidsrc})
 
-            if accttype in ['c', 'm', 'o']:
-                if len(pair) == 4:
-                    sectype = pair[3]
+                        dict_trade_data_copy = dict_trade_data.copy()
+                        if tuple_pair in dict_pair2allcol:
+                            if col_name in dict_pair2allcol[tuple_pair]:
+                                dict_pair2allcol[tuple_pair][col_name].append(dict_trade_data_copy)
+                            else:
+                                dict_pair2allcol[tuple_pair].update({col_name: [dict_trade_data_copy]})
+                        else:
+                            dict_pair2allcol.update({tuple_pair: {col_name: [dict_trade_data_copy]}})
 
-                windcode_suffix = {'SZSE': '.SZ', 'SSE': '.SH'}[secidsrc]
-                windcode = secid + windcode_suffix
 
-                longqty = 0  # longqty可能准
-                longqty_ref = 0
-                shortqty = 0
-                shortqty_ref = 0  # 实在没有postdata就用它
-                dict_holding_id = 'no reference'
-                dict_post_holding_id = 'no reference'
+            # for col_name in ['trade_future_api_holding']:
+            #     for dict_trade_data in self.gl.db_trade_data[col_name].find({'DataDate': self.gl.str_today}):
+            #         secid = dict_trade_data['instrument_id']
+            #         secidsrc = dict_trade_data['exchange']
+            #         acctidbymxz = dict_trade_data['AcctIDByMXZ']
+            #
+            #         # todo 假设 除了IC, IF, IH三类指数合约外, 为商品期货合约
+            #         if secid[:-4] in ['IC', 'IF', 'IH']:
+            #             sectype = 'IndexFuture'
+            #         else:
+            #             sectype = 'CommodityFuture'
+            #
+            #         tuple_pair = (acctidbymxz, secid, secidsrc, sectype)
+            #
+            #         dict_trade_data_copy = dict_trade_data.copy()
+            #
+            #         if tuple_pair in dict_pair2allcol:
+            #             if col_name in dict_pair2allcol[tuple_pair]:
+            #                 dict_pair2allcol[tuple_pair][col_name].append(dict_trade_data_copy)
+            #             else:
+            #                 dict_pair2allcol[tuple_pair].update({col_name: [dict_trade_data_copy]})
+            #         else:
+            #             dict_pair2allcol.update({tuple_pair: {col_name: [dict_trade_data_copy]}})
 
-                if len(list_dicts_post_holding) == 1:
-                    longqty = float(list_dicts_post_holding[0]['LongQty'])
-                    dict_post_holding_id = list_dicts_post_holding[0]['_id']
-                elif len(list_dicts_post_holding) == 0:
-                    pass
-                else:
-                    tmax = time.strptime('0:0:0', '%H:%M:%S')
-                    post_holding_id = list_dicts_post_holding[0]['_id']
-                    for d in list_dicts_post_holding:
-                        t = time.strptime(d['UpdateTime'], '%H%M%S')
-                        if tmax < t:
-                            longqty = int(d['LongQty'])
-                            tmax = t
-                            post_holding_id = d['_id']
-                    print('The postholding has too many information', post_holding_id)
+            for tuple_pair in dict_pair2allcol:
+                # if tuple_pair[0] in ['3031_m_hait_1905', '1105_m_zx_5008']:
+                #     continue
+                acctidbymxz = tuple_pair[0]
+                secid = tuple_pair[1]
+                secidsrc = tuple_pair[2]
+                sectype = tuple_pair[3]
+                longqty = 0
+                longamt = 0
+                str_updatetime = ''
 
-                if len(list_dicts_holding) == 1:
-                    longqty_ref = float(list_dicts_holding[0]['LongQty'])
-                    dict_holding_id = list_dicts_holding[0]['_id']
-                elif len(list_dicts_holding) == 0:
-                    pass
-                else:
-                    tmax = time.strptime('0:0:0', '%H:%M:%S')
-                    for d in list_dicts_holding:
-                        t = time.strptime(d['UpdateTime'], '%H%M%S')
-                        if tmax < t:
-                            longqty_ref = float(d['LongQty'])
-                            dict_holding_id = d['_id']
-                            tmax = t
-
-                if len(list_dicts_post_secloan) > 0:
-                    for d in list_dicts_post_secloan:
-                        shortqty += float(d['ShortQty'])  # 可能多个合约
-
-                if len(list_dicts_secloan) > 0:
-                    for d in list_dicts_secloan:
-                        shortqty_ref += float(d['ShortQty'])  # 可能多个合约
-
-                for dict_order in list_dicts_order:
-                    # if self.str_day == dict_order['TradeDate']:
-                    side = dict_order['Side']
-                    cumqty = int(dict_order['CumQty'])
-                    avgpx = dict_order['AvgPx']
-                    if 'yh' in dict_order['AcctIDByMXZ']:
-                        valid_cum = True
-                    elif data_source == 'huat_matic_tsi' and avgpx == 0:
-                        # 华泰有0元成交0元委托（不算撤单，成交量不为0的奇怪情况）
-                        valid_cum = False
-                    else:
-                        leavesqty = int(dict_order['LeavesQty'])
-                        orderqty = int(dict_order['OrdQty'])
-                        valid_cum = (cumqty + leavesqty == orderqty)
-                    if valid_cum:  # 交易最终态的cumqty才可以用
-                        if side == 'buy':
-                            longqty += cumqty
-                        elif side == 'sell':
-                            longqty -= cumqty
-                        elif side == 'sell short':
-                            shortqty += cumqty
-                        elif side == 'XQHQ':
-                            longqty -= cumqty
-                            shortqty -= cumqty
-                        elif side == 'MQHQ':  # 导致资金变动而不是券的变动
-                            shortqty -= cumqty
-                        else:  # 判断撤单
-                            continue
-
-                # 只监控有票子的
-                if longqty != 0 or shortqty != 0 or longqty_ref != 0:
-                    set_windcode_to_search = set_windcode_to_search | {windcode}
-                    dict_position = {
-                        'DataDate': gl.str_today,
-                        'UpdateTime': None,
-                        'AcctIDByMXZ': acctidbymxz,
-                        'SecurityID': secid,
-                        'SecurityType': sectype,
-                        #  'Symbol': symbol,  # 有的券商没有，可加可不加
-                        'SecurityIDSource': secidsrc,
-                        'LongQty': longqty,
-                        # 'LongQty_ref': longqty_ref,
-                        'ShortQty': shortqty,
-                        'NetQty': longqty - shortqty,
-                        'LongAmt': None,
-                        'ShortAmt': None,
-                        'NetAmt': None,
-                        'WindCode': windcode
-                    }
-                    list_dicts_position.append(dict_position)
-
-            elif accttype in ['f']:
-                # list_dicts_holding_future_exposure_draft = []
-                future_longqty = 0
-                future_shortqty = 0
-                secid_first_part = secid[:-4]
-                dict_future2spot_windcode = {'IC': '000905.SH', 'IH': '000016.SH', 'IF': '000300.SH'}
-                try:  # SHFE - 'ssXXXX'格式等先不管，它们对应CTA策略
-                    windcode = dict_future2spot_windcode[secid_first_part]
-
-                except:
+                try:
+                    accttype, patchmark, data_source = dict_id2info[acctidbymxz]
+                except KeyError:
                     continue
 
-                for dict_holding_future in list_dicts_holding_future:
-                    qty = dict_holding_future['position']
-                    direction = dict_holding_future['direction']
+                try:
+                    list_dicts_trade_fmtdata_holding = dict_pair2allcol[tuple_pair]['trade_formatted_data_holding']
+                except KeyError:  # pair may not has 'fmtdata_holding' etc key
+                    list_dicts_trade_fmtdata_holding = []
 
-                    if direction == 'buy':
-                        future_longqty = qty
-                        # future_longamt = close * future_longqty * self.dict_future2multiplier[secid_first_part]
-                    elif direction == 'sell':
-                        future_shortqty = qty
-                        # future_shortamt = close * future_shortqty * self.dict_future2multiplier[secid_first_part]
+                try:
+                    list_dicts_posttrd_fmtdata_short_position_last_trddate = (
+                        dict_pair2allcol[tuple_pair]['post_trade_formatted_data_short_position']
+                    )
+                except KeyError:  # pair may not has 'fmtdata_holding' etc key
+                    list_dicts_posttrd_fmtdata_short_position_last_trddate = []
+
+                try:
+                    list_dicts_trade_fmtdata_short_position = (
+                        dict_pair2allcol[tuple_pair]['trade_formatted_data_short_position']
+                    )
+                except KeyError:  # pair may not has 'fmtdata_holding' etc key
+                    list_dicts_trade_fmtdata_short_position = []
+
+                try:
+                    list_dicts_trade_fmtdata_order = dict_pair2allcol[tuple_pair]['trade_formatted_data_order']
+                except KeyError:  # pair may not has 'fmtdata_holding' etc key
+                    list_dicts_trade_fmtdata_order = []
+
+                if accttype in ['c', 'm', 'o']:
+                    if len(tuple_pair) == 4:
+                        sectype = tuple_pair[3]
+
+                    windcode_suffix = {'SZSE': '.SZ', 'SSE': '.SH'}[secidsrc]
+                    windcode = secid + windcode_suffix
+
+                    shortqty_from_posttrd_last_trddate = 0
+                    if list_dicts_trade_fmtdata_holding:
+                        for dict_trade_fmtdata_holding in list_dicts_trade_fmtdata_holding:
+                            if dict_trade_fmtdata_holding['SecurityType'] in ['IrrelevantItem']:
+                                continue
+                            else:
+                                longqty = float(dict_trade_fmtdata_holding['LongQty'])
+                                longamt = float(dict_trade_fmtdata_holding['LongAmt'])
+                                str_updatetime = dict_trade_fmtdata_holding['UpdateTime']
+
+                    if list_dicts_posttrd_fmtdata_short_position_last_trddate:
+                        for dict_posttrd_fmtdata_short_position_last_trddate in list_dicts_posttrd_fmtdata_short_position_last_trddate:
+                            shortqty_from_posttrd_last_trddate += dict_posttrd_fmtdata_short_position_last_trddate['ShortQty']
+
+                    # todo 此处只计算融券卖出情况： shortqty = shortqty_from_posttrd_last_trddate + order
+                    shortqty = shortqty_from_posttrd_last_trddate
+                    for dict_order in list_dicts_trade_fmtdata_order:
+                        side = dict_order['Side']
+                        cumqty = float(dict_order['CumQty'])
+                        avgpx = dict_order['AvgPx']
+
+                        if 'yh' in dict_order['AcctIDByMXZ']:
+                            valid_cum = True
+                        elif data_source == 'huat_matic_tsi' and avgpx == 0:
+                            # 华泰有0元成交0元委托（不算撤单，成交量不为0的奇怪情况）
+                            valid_cum = False
+                        else:
+                            leavesqty = float(dict_order['LeavesQty'])
+                            orderqty = float(dict_order['OrdQty'])
+                            valid_cum = (cumqty + leavesqty == orderqty)  # 判定order数据是否有效的数据
+
+                        if valid_cum:  # 交易最终态的cumqty才可以用
+                            if side == 'sell short':
+                                shortqty = shortqty + cumqty
+                            elif side == 'XQHQ':
+                                shortqty = shortqty - cumqty
+                            elif side == 'MQHQ':  # 导致资金变动而不是券的变动
+                                shortqty = shortqty - cumqty
+                            else:  # 判断撤单
+                                continue
+                        if not str_updatetime:
+                            str_updatetime = dict_order['UpdateTime']
+
+                    # 出于节省查询次数考虑，只在shortqty有值时查询
+                    if shortqty:
+                        if windcode in ['510500.SH']:
+                            lastpx = 7.12  # todo 实时行情
+                        else:
+                            b_dict_md = self.server_redis_md.get(f'market_{windcode}')
+                            lastpx = orjson.loads(b_dict_md)['LastPx'] / 10000
+                        shortamt = shortqty * lastpx
                     else:
-                        raise ValueError('Unknown direction in future respond.')
+                        shortqty = 0
+                        shortamt = 0
 
-                if future_longqty != 0 or future_shortqty != 0:
-                    set_windcode_to_search = set_windcode_to_search | {windcode}
-                    dict_position = {
-                        'DataDate': gl.str_today,
-                        'UpdateTime': None,
-                        'AcctIDByMXZ': acctidbymxz,
-                        'SecurityID': secid,
-                        'SecurityType': 'Future',
-                        'Symbol': None,
-                        'SecurityIDSource': secidsrc,
-                        'LongQty': future_longqty,
-                        'ShortQty': future_shortqty,
-                        'NetQty': future_longqty - future_shortqty,
-                        'LongAmt': None,
-                        'ShortAmt': None,
-                        'NetAmt': None,
-                        'WindCode': windcode
-                    }
-                    list_dicts_position.append(dict_position)
+                    if not str_updatetime:
+                        str_updatetime = datetime.now().strftime('%H%M%S')
 
-        self.record_position_time = datetime.datetime.today().strftime("%H%M%S")
+                    if longqty or shortqty:
+                        dict_position = {
+                            'DataDate': self.gl.str_today,
+                            'UpdateTime': str_updatetime,
+                            'AcctIDByMXZ': acctidbymxz,
+                            'SecurityID': secid,
+                            'SecurityType': sectype,
+                            'SecurityIDSource': secidsrc,
+                            'LongQty': longqty,
+                            'ShortQty': shortqty,
+                            'NetQty': longqty - shortqty,
+                            'LongAmt': longamt,
+                            'ShortAmt': shortamt,
+                            'NetAmt': longamt - shortamt,
+                            'WindCode': windcode
+                        }
+                        list_dicts_position.append(dict_position)
 
-        for dict_position in list_dicts_position:
-            windcode = dict_position['WindCode']
-            if dict_position['SecurityType'] == 'Index Future':
-                secid_first_part = dict_position['SecurityID'][:-4]
-                point = self.dict_future2multiplier[secid_first_part]
-                windcode_spot = self.dict_future2spot[secid_first_part]
-                b_dict_md = server_redis_md.get(f'market_{windcode_spot}')
-                lastpx = orjson.loads(b_dict_md)['LastPx'] / 10000
-                dict_position['LongAmt'] = dict_position['LongQty'] * lastpx * point
-                dict_position['ShortAmt'] = dict_position['ShortQty'] * lastpx * point
+                elif accttype in ['f']:
+                    longqty = 0
+                    longamt = 0
+                    shortqty = 0
+                    shortamt = 0
+                    str_updatetime = ''
+                    for dict_trade_fmtdata in list_dicts_trade_fmtdata_holding:
+                        str_updatetime = dict_trade_fmtdata['UpdateTime']
+                        if dict_trade_fmtdata['SecurityID'] == secid:
+                            longqty += dict_trade_fmtdata['LongQty']
+                            longamt += dict_trade_fmtdata['LongAmt']
 
-            else:
-                b_dict_md = server_redis_md.get(f'market_{windcode}')
-                lastpx = orjson.loads(b_dict_md)['LastPx'] / 10000
-                dict_position['LongAmt'] = dict_position['LongQty'] * lastpx
-                dict_position['ShortAmt'] = dict_position['ShortQty'] * lastpx
-            dict_position['NetAmt'] = dict_position['LongAmt'] - dict_position['ShortAmt']
-            dict_position['UpdateTime'] = self.record_position_time
+                    for dict_trade_fmtdata in list_dicts_trade_fmtdata_short_position:
+                        if not str_updatetime:
+                            str_updatetime = dict_trade_fmtdata['UpdateTime']
+                        if dict_trade_fmtdata['SecurityID'] == secid:
+                            shortqty += dict_trade_fmtdata['ShortQty']
+                            shortamt += dict_trade_fmtdata['ShortAmt']
 
-        if list_dicts_position:
-            gl.db_trade_data['trade_position'].delete_many(
-                {'DataDate': gl.str_today, 'UpdateTime': self.record_position_time})
-            gl.db_trade_data['trade_position'].insert_many(list_dicts_position)
+                        dict_position = {
+                            'DataDate': self.gl.str_today,
+                            'UpdateTime': str_updatetime,
+                            'AcctIDByMXZ': acctidbymxz,
+                            'SecurityID': secid,
+                            'SecurityType': sectype,
+                            'Symbol': None,
+                            'SecurityIDSource': secidsrc,
+                            'LongQty': longqty,
+                            'ShortQty': shortqty,
+                            'NetQty': longqty - shortqty,
+                            'LongAmt': longamt,
+                            'ShortAmt': shortamt,
+                            'NetAmt': longamt - shortamt,
+                        }
+                        list_dicts_position.append(dict_position)
+                else:
+                    raise ValueError('Unknown Accttype.')
 
-        gl.col_trade_glv.update_one({'DataDate': gl.str_today}, {'$set': {
-            'FmtFinished': False, 'PosFinished': True, 'PositionUpdateTime': self.record_position_time}})
-        return
+            # for dict_position in list_dicts_position:
+            #     windcode = dict_position['WindCode']
+            #     if dict_position['SecurityType'] == 'Index Future':
+            #         secid_first_part = dict_position['SecurityID'][:-4]
+            #         point = self.gl.dict_future2multiplier[secid_first_part]
+            #         windcode_spot = self.gl.dict_future2spot[secid_first_part]
+            #         b_dict_md = server_redis_md.get(f'market_{windcode_spot}')
+            #         lastpx = orjson.loads(b_dict_md)['LastPx'] / 10000
+            #         dict_position['LongAmt'] = dict_position['LongQty'] * lastpx * point
+            #         dict_position['ShortAmt'] = dict_position['ShortQty'] * lastpx * point
+            #
+            #     else:
+            #         b_dict_md = server_redis_md.get(f'market_{windcode}')
+            #         lastpx = orjson.loads(b_dict_md)['LastPx'] / 10000
+            #         dict_position['LongAmt'] = dict_position['LongQty'] * lastpx
+            #         dict_position['ShortAmt'] = dict_position['ShortQty'] * lastpx
+            #     dict_position['NetAmt'] = dict_position['LongAmt'] - dict_position['ShortAmt']
+            #     dict_position['UpdateTime'] = self.record_position_time
 
-    def run(self):
-        position_thread = threading.Thread(target=self.update_position)
-        position_thread.start()
-
-
-class Exposure:
-    def __init__(self):
-        self.record_position_time = None
-        self.record_fmt_time = None
-        self.event = threading.Event()
-        self.lock = threading.Lock()
+            if list_dicts_position:
+                self.gl.db_trade_data['trade_position'].delete_many({'DataDate': self.gl.str_today})
+                self.gl.db_trade_data['trade_position'].insert_many(list_dicts_position)
+            print('Update position finished.')
+            time.sleep(5)
 
     def exposure_analysis(self):
-        self.record_position_time = gl.col_trade_glv.find_one({'DataDate': gl.str_today})['PositionUpdateTime']
-        list_dicts_acctinfo = list(gl.col_acctinfo.find({'DataDate': gl.str_today, 'DataDownloadMark': 1}))
-        list_dicts_position = list(
-            gl.db_trade_data['trade_position'].find(
-                {'DataDate': gl.str_today, 'UpdateTime': self.record_position_time}
-            )
-        )
-        dict_acctid2list_position = {}
-        # Note5. 只调用mongodb.find()一次
-        # 原本：for 遍历acctid， 每次查找collection.find(acctidbymxz, datadate, updatetime),
-        # 改进： 只查找一次collection.find( datadate, updatetime)， 然后存成词典： {acctid: [position]}
-        # 也方便汇总成一个账户的exposure
-        for _ in gl.db_trade_data['trade_position'].find(
-                {'DataDate': gl.str_today, 'UpdateTime': self.record_position_time}
-        ):
-            acctidbymxz = _['AcctIDByMXZ']
-            if acctidbymxz in dict_acctid2list_position:
-                dict_acctid2list_position[acctidbymxz].append(_)
-            else:
-                dict_acctid2list_position[acctidbymxz] = [_]
-        list_dict_acct_exposure = []
-        dict_prdcode2exposure = {}
-        for dict_acctinfo in list_dicts_acctinfo:
-            acctidbymxz = dict_acctinfo['AcctIDByMXZ']
-            accttype = dict_acctinfo['AcctType']
-            prdcode = dict_acctinfo['PrdCode']
-            mdm = dict_acctinfo['MonitorDisplayMark']
-            if dict_acctinfo['MonitorExposureAnalysisMark'] != '0':
-                acct_exposure_dict = {'AcctIDByMXZ': acctidbymxz, 'PrdCode': prdcode, 'MonitorDisplayMark': mdm,
-                                      'UpdateTime': self.record_position_time, 'DataDate': gl.str_today,
-                                      'LongQty': 0, 'ShortQty': 0, 'NetQty': 0,
-                                      'LongAmt': 0, 'ShortAmt': 0, 'NetAmt': 0}
+        while True:
+            dict_acctid2list_position = {}
+            str_updatetime = ''
+            for dict_trade_position in self.gl.db_trade_data['trade_position'].find({'DataDate': self.gl.str_today}):
+                acctidbymxz = dict_trade_position['AcctIDByMXZ']
+                str_updatetime = dict_trade_position['UpdateTime']
+                if acctidbymxz in dict_acctid2list_position:
+                    dict_acctid2list_position[acctidbymxz].append(dict_trade_position)
+                else:
+                    dict_acctid2list_position[acctidbymxz] = [dict_trade_position]
+
+            list_dict_acct_exposure = []
+            dict_prdcode2exposure = {}
+            for dict_acctinfo in self.gl.col_acctinfo.find({'DataDate': self.gl.str_today, 'DataDownloadMark': 1}):
+                acctidbymxz = dict_acctinfo['AcctIDByMXZ']
+                accttype = dict_acctinfo['AcctType']
+                prdcode = dict_acctinfo['PrdCode']
+                mdm = dict_acctinfo['MonitorDisplayMark']
+                acct_exposure_dict = {
+                    'AcctIDByMXZ': acctidbymxz, 'PrdCode': prdcode, 'MonitorDisplayMark': mdm, 'UpdateTime': str_updatetime,
+                    'DataDate': self.gl.str_today, 'LongQty': 0, 'ShortQty': 0, 'NetQty': 0, 'LongAmt': 0, 'ShortAmt': 0,
+                    'NetAmt': 0
+                }
+
                 if acctidbymxz in dict_acctid2list_position:
                     for dict_position in dict_acctid2list_position[acctidbymxz]:
-                        if dict_position['SecurityType'] == 'IrrelevantItem' or dict_position['SecurityType'] == 'CE':
+                        if (dict_position['SecurityType'] == 'IrrelevantItem'
+                                or dict_position['SecurityType'] in ['CE', 'MMF']):
                             continue
                         else:
                             for key in ['LongQty', 'ShortQty', 'NetQty', 'LongAmt', 'ShortAmt', 'NetAmt']:
@@ -2185,6 +2244,7 @@ class Exposure:
                         dict_prdcode2exposure[prdcode]['StkLongAmt'] = 0
                         dict_prdcode2exposure[prdcode]['StkShortAmt'] = 0
                         dict_prdcode2exposure[prdcode]['StkNetAmt'] = 0
+
                 elif dict_prdcode2exposure[prdcode]['LongQty'] is None:
                     pass
                 else:
@@ -2198,31 +2258,144 @@ class Exposure:
                         dict_prdcode2exposure[prdcode]['StkNetAmt'] += acct_exposure_dict['NetAmt']
                 list_dict_acct_exposure.append(acct_exposure_dict)
 
-        for prdcode in dict_prdcode2exposure:
-            for key in ['LongQty', 'ShortQty', 'NetQty', 'LongAmt', 'ShortAmt', 'NetAmt']:
-                if dict_prdcode2exposure[prdcode][key]:
-                    dict_prdcode2exposure[prdcode][key] = round(dict_prdcode2exposure[prdcode][key], 2)
+            for prdcode in dict_prdcode2exposure:
+                for key in ['LongQty', 'ShortQty', 'NetQty', 'LongAmt', 'ShortAmt', 'NetAmt']:
+                    if dict_prdcode2exposure[prdcode][key]:
+                        dict_prdcode2exposure[prdcode][key] = round(dict_prdcode2exposure[prdcode][key], 2)
 
-        list_dict_prdcode_exposure = list(dict_prdcode2exposure.values())
+            list_dict_prdcode_exposure = list(dict_prdcode2exposure.values())  # todo ? 这是啥
 
-        if list_dict_acct_exposure:
-            gl.db_trade_data['trade_exposure_by_acctid'].delete_many(
-                {'DataDate': gl.str_today, 'UpdateTime': self.record_position_time})
-            gl.db_trade_data['trade_exposure_by_acctid'].insert_many(list_dict_acct_exposure)
-            gl.db_trade_data['trade_exposure_by_prdcode'].insert_many(list_dict_prdcode_exposure)
-        return
+            if list_dict_acct_exposure:
+                self.gl.db_trade_data['trade_exposure_by_acctid'].delete_many({'DataDate': self.gl.str_today})
+                self.gl.db_trade_data['trade_exposure_by_acctid'].insert_many(list_dict_acct_exposure)
+            if list_dict_prdcode_exposure:
+                self.gl.db_trade_data['trade_exposure_by_prdcode'].delete_many({'DataDate': self.gl.str_today})
+                self.gl.db_trade_data['trade_exposure_by_prdcode'].insert_many(list_dict_prdcode_exposure)
+            time.sleep(5)
+
+    def get_col_bs(self):
+        while True:
+            dict_acctidbymxz2list_dicts_trade_position = {}
+            for dict_trade_position in self.gl.db_trade_data['trade_position'].find(
+                    {'DataDate': self.gl.str_today}, {'_id': 0}
+            ):
+                acctidbymxz = dict_trade_position['AcctIDByMXZ']
+                if acctidbymxz in dict_trade_position:
+                    dict_acctidbymxz2list_dicts_trade_position[acctidbymxz].append(dict_trade_position)
+                else:
+                    dict_acctidbymxz2list_dicts_trade_position[acctidbymxz] = [dict_trade_position]
+
+            # todo 需要向此处添加期货户的bs.
+            dict_acctidbymxz2dict_fund = {}
+            for dict_trade_formatted_fund in (
+                    self.gl.db_trade_data['trade_formatted_data_fund'].find({'DataDate': self.gl.str_today}, {'_id': 0})
+            ):
+                dict_acctidbymxz2dict_fund.update({dict_trade_formatted_fund['AcctIDByMXZ']: dict_trade_formatted_fund})
+
+            list_dicts_bs_by_acct = []
+            dict_prdcode2dict_bs_by_acct = {}
+
+            for dict_acctinfo in self.gl.col_acctinfo.find(
+                    {'DataDate': self.gl.str_today, 'DataDownloadMark': 1}, {'_id': 0}
+            ):
+                acctidbymxz = dict_acctinfo['AcctIDByMXZ']
+                prdcode = dict_acctinfo['PrdCode']
+                mdm = dict_acctinfo['MonitorDisplayMark']
+                if acctidbymxz in dict_acctidbymxz2dict_fund:
+                    ttasset = dict_acctidbymxz2dict_fund[acctidbymxz]['TotalAsset']
+                    netasset = dict_acctidbymxz2dict_fund[acctidbymxz]['NetAsset']
+                    avlfund = dict_acctidbymxz2dict_fund[acctidbymxz]['AvailableFund']
+                    cash = dict_acctidbymxz2dict_fund[acctidbymxz]['Cash']
+                    if 'KQZJ' in dict_acctidbymxz2dict_fund[acctidbymxz]:
+                        kqzj = dict_acctidbymxz2dict_fund[acctidbymxz]['KQZJ']
+                    else:
+                        kqzj = ''
+
+                else:
+                    continue
+
+                flag_na = netasset is None
+                flag_cash = cash is None   # m户: avlfund可能为 None; c户 avlfund也是None
+                flag_ta = ttasset is None
+                assert(not(flag_na and flag_ta))  # 净资产总资产必有一个
+                if flag_ta:
+                    ttasset = netasset
+                if flag_na:
+                    netasset = ttasset
+                if flag_cash:
+                    if flag_ta:
+                        cash = netasset
+                    else:
+                        cash = ttasset
+
+                if acctidbymxz in dict_acctidbymxz2list_dicts_trade_position:
+                    for dict_position in dict_acctidbymxz2list_dicts_trade_position[acctidbymxz]:
+                        if dict_position['SecurityType'] != 'IrrelevantItem':
+                            if flag_ta:
+                                ttasset += dict_position['ShortAmt']  # 总资产 = 净资产+ 总负债（约为short）
+                            if flag_na:
+                                netasset -= dict_position['ShortAmt']
+                            if flag_cash:
+                                if flag_na:
+                                    cash -= dict_position['NetAmt']   # 总资产 - 总市值 （约为NetAmt)
+                                if flag_ta:
+                                    cash -= dict_position['LongAmt']  # cash = 净资产 - （总市值 - 总负债） （约为LongAmt）
+
+                if flag_cash and '_c_' in acctidbymxz:
+                    avlfund = cash
+
+                dict_bs_by_acct = {
+                    'AcctIDByMXZ': acctidbymxz, 'PrdCode': prdcode, 'MonitorDisplayMark': mdm,
+                    'DataDate': self.gl.str_today, 'AvailableFund': avlfund, 'Cash': cash, 'KQZJ': kqzj,
+                    'NetAsset': netasset
+                }
+                list_dicts_bs_by_acct.append(dict_bs_by_acct)
+
+                if prdcode in dict_prdcode2dict_bs_by_acct:
+                    for key in ['Cash', 'NetAsset', 'AvailableFund']:
+                        dict_prdcode2dict_bs_by_acct[prdcode][key] += dict_bs_by_acct[key]
+                        dict_bs_by_acct[key] = round(dict_bs_by_acct[key], 2)
+                else:
+                    dict_bs_by_acct_copy = dict_bs_by_acct.copy()
+                    del dict_bs_by_acct_copy['AcctIDByMXZ']
+                    dict_prdcode2dict_bs_by_acct[prdcode] = dict_bs_by_acct_copy
+
+            for prdcode in dict_prdcode2dict_bs_by_acct:
+                for key in ['Cash', 'NetAsset', 'KQZJ', 'AvailableFund']:
+                    if dict_prdcode2dict_bs_by_acct[prdcode][key]:
+                        dict_prdcode2dict_bs_by_acct[prdcode][key] = round(dict_prdcode2dict_bs_by_acct[prdcode][key], 2)
+
+            list_dict_prdcode_bs = list(dict_prdcode2dict_bs_by_acct.values())
+
+            if list_dicts_bs_by_acct:
+                self.gl.col_trade_bs_by_acct.delete_many({'DataDate': self.gl.str_today})
+                self.gl.col_trade_bs_by_acct.insert_many(list_dicts_bs_by_acct)
+                self.gl.col_trade_bs_by_prdcode.delete_many({'DataDate': self.gl.str_today})
+                self.gl.col_trade_bs_by_prdcode.insert_many(list_dict_prdcode_bs)
+            print('Exposure analysis finished.')
+            time.sleep(5)
 
     def run(self):
-        exposure_monitoring_thread = threading.Thread(target=self.exposure_analysis)
-        exposure_monitoring_thread.start()
+        # self.update_trdraw_cmo()
+        # if '083000' < datetime.now().strftime('%H%M%S') < '151500':
+        #     self.update_trdraw_f()
+        # self.update_trdfmt_cmfo()
+        # self.update_position()
+        # self.get_col_bs()
+        # self.exposure_analysis()
+        t1_trdraw_cmo = Thread(target=self.update_trdraw_cmo)
+        t1_trdraw_cmo.start()
+        if '083000' < datetime.now().strftime('%H%M%S') < '151500':
+            t2_trdraw_f = Thread(target=self.update_trdraw_f)
+            t2_trdraw_f.start()
+        t3_trdfmt_cmfo = Thread(target=self.update_trdfmt_cmfo)
+        t3_trdfmt_cmfo.start()
+        t4_update_position = Thread(target=self.update_position)
+        t4_update_position.start()
+        t5_exposure_analysis = Thread(target=self.exposure_analysis)
+        t5_exposure_analysis.start()
 
 
 if __name__ == '__main__':
-    read_raw = ReadRaw()
-    read_raw.run()
-    fmt_data = FmtData()
-    fmt_data.run()
-    position = Position()
-    position.run()
-    exposure = Exposure()
-    exposure.run()
+    task = GenerateExposureMonitorData()
+    task.run()
