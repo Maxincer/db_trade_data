@@ -13,8 +13,8 @@ from pymongo import MongoClient
 
 from WindPy import w
 
-STR_TODAY = datetime.today().strftime('%Y%m%d')
-# STR_TODAY = '20210416'
+# STR_TODAY = datetime.today().strftime('%Y%m%d')
+STR_TODAY = '20210423'
 
 
 class Globals:
@@ -69,7 +69,7 @@ class Globals:
         self.list_data_source_types_xtqmt_jjb = ['dh_xtqmt_jjb',  'hr_xtqmt_jjb', 'gd_xtqmt_jjb', 'zhes_xtqmt_jjb']
         self.list_data_src_xtpb = [
             'zxjt_xtpb', 'zhaos_xtpb', 'zhes_xtpb', 'hf_xtpb', 'gl_xtpb',
-            'swhy_xtpb', 'cj_xtpb', 'hengt_xtpb', 'zygj_xtpb', 'gd_xtpb', 'tpy_xtpb'
+            'swhy_xtpb', 'cj_xtpb', 'hengt_xtpb', 'zygj_xtpb', 'gd_xtpb', 'tpy_xtpb', 'zh_xtpb'
         ]
         self.list_data_src_htpb = ['gy_htpb', 'gs_htpb', 'gj_htpb', 'sh_htpb']
         self.dict_future2multiplier = {'IC': 200, 'IH': 300, 'IF': 300}

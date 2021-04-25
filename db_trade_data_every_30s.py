@@ -126,6 +126,7 @@ class GenerateExposureMonitorData:
                         if e not in self.list_warn:
                             self.list_warn.append(e)
                             logger_expo.error(e)
+                            print(e)
 
             elif data_source_type in ['huat_matic_tsi']:
                 for acctidbybroker in idinfo:
@@ -150,6 +151,7 @@ class GenerateExposureMonitorData:
                         if e not in self.list_warn:
                             self.list_warn.append(e)
                             logger_expo.error(e)
+                            print(e)
 
             elif data_source_type in self.gl.list_data_src_htpb:  # 有改动
                 fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today)
@@ -346,6 +348,7 @@ class GenerateExposureMonitorData:
                         if e not in self.list_warn:
                             self.list_warn.append(e)
                             logger_expo.error(e)
+                            print(e)
 
             elif data_source_type in ['huat_matic_tsi']:
                 for acctidbybroker in idinfo:
@@ -369,6 +372,7 @@ class GenerateExposureMonitorData:
                         if e not in self.list_warn:
                             self.list_warn.append(e)
                             logger_expo.error(e)
+                            print(e)
 
             elif data_source_type in self.gl.list_data_src_htpb:  # 有改动
                 fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today)
@@ -517,6 +521,7 @@ class GenerateExposureMonitorData:
                         if e not in self.list_warn:
                             self.list_warn.append(e)
                             logger_expo.error(e)
+                            print(e)
 
             elif data_source_type in ['huat_matic_tsi']:  # 有改动
                 for acctidbybroker in idinfo:
@@ -540,6 +545,7 @@ class GenerateExposureMonitorData:
                         if e not in self.list_warn:
                             self.list_warn.append(e)
                             logger_expo.error(e)
+                            print(e)
 
             elif data_source_type in ['gtja_pluto']:  # 有改动
                 fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today)
@@ -2369,8 +2375,8 @@ class GenerateExposureMonitorData:
     def run(self):
         while True:
             self.update_trdraw_cmo()
-            if '083000' < datetime.now().strftime('%H%M%S') < '151500':
-                self.update_trdraw_f()
+            # if '083000' < datetime.now().strftime('%H%M%S') < '151500':
+            #     self.update_trdraw_f()
             self.update_trdfmt_cmfo()
             self.update_position()
             self.get_col_bs()
