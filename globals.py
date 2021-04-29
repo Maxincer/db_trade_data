@@ -13,8 +13,8 @@ from pymongo import MongoClient
 
 from WindPy import w
 
-# STR_TODAY = datetime.today().strftime('%Y%m%d')
-STR_TODAY = '20210423'
+STR_TODAY = datetime.today().strftime('%Y%m%d')
+# STR_TODAY = '20210428'
 
 
 class Globals:
@@ -63,15 +63,27 @@ class Globals:
         # post trade
         self.db_post_trade_data = self.server_mongodb['post_trade_data']
 
+        self.list_acctidsbymxz_cta = []
+        for dict_acctinfo in self.col_acctinfo.find({'DataDate': self.str_today}):
+            if dict_acctinfo['StrategiesAllocationByAcct']:
+                list_strategies = dict_acctinfo['StrategiesAllocationByAcct'].split(';')
+                if 'CTA' in list_strategies:
+                    self.list_acctidsbymxz_cta.append(dict_acctinfo['AcctIDByOuWangJiang4FTrd'])
+
         # 其他
         self.dict_exchange2secidsrc = {'深A': 'SZSE', '沪A': 'SSE'}
 
-        self.list_data_source_types_xtqmt_jjb = ['dh_xtqmt_jjb',  'hr_xtqmt_jjb', 'gd_xtqmt_jjb', 'zhes_xtqmt_jjb']
+        self.list_data_src_xtqmt_jjb = [
+            'dh_xtqmt_jjb',  'hr_xtqmt_jjb', 'gd_xtqmt_jjb', 'gj_xtqmt_jjb', 'zhaos_xtqmt_jjb', 'zhes_xtqmt_jjb',
+            'zh_xtqmt_jjb'
+        ]
+
         self.list_data_src_xtpb = [
-            'zxjt_xtpb', 'zhaos_xtpb', 'zhes_xtpb', 'hf_xtpb', 'gl_xtpb',
+            'zxjt_xtpb', 'zhaos_xtpb', 'zhes_xtpb', 'hf_xtpb', 'gl_xtpb', 'pa_xtpb',
             'swhy_xtpb', 'cj_xtpb', 'hengt_xtpb', 'zygj_xtpb', 'gd_xtpb', 'tpy_xtpb', 'zh_xtpb'
         ]
-        self.list_data_src_htpb = ['gy_htpb', 'gs_htpb', 'gj_htpb', 'sh_htpb']
+
+        self.list_data_src_htpb = ['gy_htpb', 'gs_htpb', 'gj_htpb', 'hait_htpb', 'sh_htpb']
         self.dict_future2multiplier = {'IC': 200, 'IH': 300, 'IF': 300}
         self.dict_future2spot = {'IC': '000905.SH', 'IH': '000016.SH', 'IF': '000300.SH'}
 

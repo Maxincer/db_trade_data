@@ -19,7 +19,9 @@ from datetime import datetime
 import time
 from threading import Thread
 import orjson
+import os
 import pandas as pd
+import pickle
 import redis
 from trader_v1 import Trader
 import codecs
@@ -47,6 +49,7 @@ class GenerateExposureMonitorData:
         self.gl = Globals()
         self.list_warn = []
         self.id2source = ID2Source(self.gl.db_basicinfo, 'data/security_id.xlsx')
+
 
     def read_rawdata_from_trdclient(
             self, fpath, sheet_type, data_source_type, accttype, idinfo, dict_acctidbymxz2acctidbyborker
@@ -241,7 +244,7 @@ class GenerateExposureMonitorData:
                                 dict_fund['AcctIDByMXZ'] = idinfo[dict_fund['projectid']]
                                 list_ret.append(dict_fund)
 
-            elif data_source_type in ['dh_xtqmt_jjb', 'gd_xtqmt_jjb', 'hr_xtqmt_jjb', 'zhes_xtqmt_jjb', 'gj_xtqmt_jjb']:
+            elif data_source_type in self.gl.list_data_src_xtqmt_jjb:
                 for dldfilter in idinfo:
                     fpath_replaced = (
                         fpath.replace('<YYYYMMDD>', self.gl.str_today)
@@ -265,7 +268,7 @@ class GenerateExposureMonitorData:
                 pass
 
             else:
-                e = f'Field data_source_type {data_source_type} not exist in basic info!'
+                e = f'Field data_source_type {data_source_type} when reading fund data!'
                 print(e)
                 if e not in self.list_warn:
                     self.list_warn.append(e)
@@ -461,7 +464,7 @@ class GenerateExposureMonitorData:
                                 dict_holding['AcctIDByMXZ'] = idinfo[dict_holding['projectid']]
                                 list_ret.append(dict_holding)
 
-            elif data_source_type in ['dh_xtqmt_jjb', 'gd_xtqmt_jjb', 'hr_xtqmt_jjb', 'zhes_xtqmt_jjb', 'gj_xtqmt_jjb']:
+            elif data_source_type in self.gl.list_data_src_xtqmt_jjb:
                 for dldfilter in idinfo:
                     fpath_replaced = (
                         fpath.replace('<YYYYMMDD>', self.gl.str_today)
@@ -481,6 +484,9 @@ class GenerateExposureMonitorData:
                                     dict_fund['AcctIDByMXZ'] = idinfo[dict_fund['账号']]
                                     list_ret.append(dict_fund)
 
+            else:
+                raise ValueError(f'Unknown datasrc type {data_source_type} when reading holding data.')
+
         elif sheet_type == 'order':
             # todo 先做这几个有secloan的（不然order没意义）:
             if data_source_type in self.gl.list_data_src_xtpb:
@@ -491,6 +497,7 @@ class GenerateExposureMonitorData:
                         logger_expo.warning('读取空白文件%s' % fpath_replaced)
                     else:
                         list_keys = list_datalines[0].strip().split(',')
+
                     for dataline in list_datalines[1:]:
                         list_values = dataline.strip().split(',')
                         if len(list_values) == len(list_keys):
@@ -646,7 +653,7 @@ class GenerateExposureMonitorData:
                                 dict_order['AcctIDByMXZ'] = idinfo[dict_order['projectid']]
                                 list_ret.append(dict_order)
 
-            elif data_source_type in ['dh_xtqmt_jjb', 'gd_xtqmt_jjb', 'hr_xtqmt_jjb', 'zhes_xtqmt_jjb', 'gj_xtqmt_jjb']:
+            elif data_source_type in self.gl.list_data_src_xtqmt_jjb:
                 for dldfilter in idinfo:
                     fpath_replaced = (
                         fpath.replace('<YYYYMMDD>', self.gl.str_today)
@@ -665,6 +672,8 @@ class GenerateExposureMonitorData:
                                 if dict_fund['账号'] in idinfo:
                                     dict_fund['AcctIDByMXZ'] = idinfo[dict_fund['账号']]
                                     list_ret.append(dict_fund)
+            else:
+                raise ValueError(f'Unknown datasrc type {data_source_type} when reading order data.')
 
         elif sheet_type == 'short_position':
             # todo 留出接口
@@ -847,7 +856,7 @@ class GenerateExposureMonitorData:
             # 可用资金, 交易概念, 包括: 可用于交易担保品资金, 可用于交易证券资金
             list_fields_af = [
                 '可用', 'A股可用', '可用数', '现金资产', '可用金额', '资金可用金', '可用余额',
-                'T+0交易可用金额', 'enable_balance', 'fund_asset', '可用资金', 'instravl',
+                'T+0交易可用金额', 'enable_balance', 'fund_asset', '可用资金', 'instravl','买担保品可用资金'
             ]
             list_fields_ttasset = [
                 '总资产', '资产', '总 资 产', '实时总资产', '单元总资产', '资产总额', '产品总资产',
@@ -855,10 +864,11 @@ class GenerateExposureMonitorData:
             ]
             list_fields_na = ['netasset', 'net_asset', '账户净值', '净资产']
             list_fields_kqzj = [
-                '可取资金', '可取金额', 'fetch_balance', '沪深T+1交易可用', '可取余额', 'T+1交易可用金额', '可取数', '可取现金'
+                '可取资金', '可取金额', 'fetch_balance', '沪深T+1交易可用', '可取余额', 'T+1交易可用金额', '可取数', '可取现金',
+                '可转出资产',
             ]
             list_fields_tl = ['总负债', 'total_debit']
-            list_fields_mktvalue = ['总市值', 'market_value', '证券资产', '证券市值']
+            list_fields_mktvalue = ['总市值', 'market_value', '证券资产', '证券市值', '股票市值']
 
             # ---------------  Security 相关列表  ---------------------
             list_fields_secid = ['代码', '证券代码', 'stock_code', 'stkcode']
@@ -1096,7 +1106,7 @@ class GenerateExposureMonitorData:
                     err = 'unknown KQZJ name %s' % data_source
 
                     if flag_check_new_name and data_source not in (
-                            ['gf_tyt', 'zhaos_xtpb'] + self.gl.list_data_source_types_xtqmt_jjb
+                            ['gf_tyt', 'zhaos_xtpb'] + self.gl.list_data_src_xtqmt_jjb
                     ):
                         if err not in self.list_warn:
                             self.list_warn.append(err)
@@ -1185,7 +1195,7 @@ class GenerateExposureMonitorData:
                     err = 'unknown symbol name %s' % data_source
                     if flag_check_new_name:
                         if data_source in (
-                                ['hait_ehfz_api', 'yh_apama', 'gf_tyt'] + self.gl.list_data_source_types_xtqmt_jjb
+                                ['hait_ehfz_api', 'yh_apama', 'gf_tyt'] + self.gl.list_data_src_xtqmt_jjb
                         ):
                             symbol = '???'
                         else:
@@ -1269,6 +1279,10 @@ class GenerateExposureMonitorData:
                         if not dict_order['stock_code']:
                             continue
 
+                    if data_source in ['gl_xtpb']:
+                        if not dict_order['证券代码']:
+                            continue
+
                     flag_check_new_name = True
                     for field_secid in list_fields_secid:
                         if field_secid in dict_order:
@@ -1323,7 +1337,7 @@ class GenerateExposureMonitorData:
 
                     err = 'unknown symbol name %s' % data_source
                     if flag_check_new_name:
-                        if data_source in ['hait_ehfz_api', 'yh_apama', 'gf_tyt'] + self.gl.list_data_source_types_xtqmt_jjb:
+                        if data_source in ['hait_ehfz_api', 'yh_apama', 'gf_tyt'] + self.gl.list_data_src_xtqmt_jjb:
                             symbol = ''  # 这几个券商中没有提供symbol
                         else:
                             if err not in self.list_warn:
@@ -1722,7 +1736,7 @@ class GenerateExposureMonitorData:
 
                     if secid[:-4] in ['IC', 'IF', 'IH']:
                         sectype = 'IndexFuture'
-                        windcode = self.gl.dict_future2spot[secid[:-4]]
+                        windcode = self.gl.dict_future2spot[secid[:-4]]  # todo 此处假设为现货
                         lastpx = orjson.loads(self.server_redis_md.get(f'index_{windcode}'))['LastIndex'] / 10000
 
                     else:
@@ -1835,7 +1849,6 @@ class GenerateExposureMonitorData:
             'short_position': self.gl.col_trade_fmtdata_short_position
         }
 
-        # todo 将future账户视为股票账户，重构
         dict_sheet_type2dict_acctidbymxz2list_dicts_trdraw = {}
         for sheet_type in dict_sheet_type2col:
             col = dict_sheet_type2col[sheet_type]
@@ -1928,7 +1941,6 @@ class GenerateExposureMonitorData:
                         dict_pair2allcol[tuple_pair].update({col_name: [dict_trade_data_copy]})
                 else:
                     dict_pair2allcol.update({tuple_pair: {col_name: [dict_trade_data_copy]}})
-
 
         for col_name in ['post_trade_formatted_data_short_position']:
             for dict_post_trade_data_last_trddate in self.gl.db_post_trade_data[col_name].find(
@@ -2372,11 +2384,32 @@ class GenerateExposureMonitorData:
             self.gl.col_trade_bs_by_prdcode.insert_many(list_dict_prdcode_bs)
         print('Exposure analysis finished.')
 
+    def update_facct_cps_allocation_from_zbw(self):
+        for acctidbyowj in self.gl.list_acctidsbymxz_cta:
+            dirpath_cps_allocation = f'//192.168.2.177/PosSave_Check/{self.gl.str_today}/{acctidbyowj}'
+            # 遍历文件夹内容，找到最新文件名的文件
+            list_fns = os.listdir(dirpath_cps_allocation)
+            list_fns.sort()
+            fn_cps_allocation = list_fns[-1]
+            fpath_cps_allocation = os.path.join(dirpath_cps_allocation, fn_cps_allocation)
+            with open(fpath_cps_allocation, 'rb') as f:
+                dict_cps_allocation = pickle.load(f)
+                if f'{acctidbyowj}_Hedge' in dict_cps_allocation:
+                    list_contracts = dict_cps_allocation[f'{acctidbyowj}_Hedge']['contract_all']
+                    list_qty = [float(_) for _ in dict_cps_allocation[f'{acctidbyowj}_Hedge']['target_holding_term']]
+
+
+
+                    dict_contract2qty = dict(zip(list_contracts, list_qty))
+                else:
+                    dict_contract2qty = {contract: 0 for contract in list_contracts}
+
+
     def run(self):
         while True:
             self.update_trdraw_cmo()
-            # if '083000' < datetime.now().strftime('%H%M%S') < '151500':
-            #     self.update_trdraw_f()
+            if '083000' < datetime.now().strftime('%H%M%S') < '151500':
+                self.update_trdraw_f()
             self.update_trdfmt_cmfo()
             self.update_position()
             self.get_col_bs()
@@ -2398,4 +2431,5 @@ class GenerateExposureMonitorData:
 
 if __name__ == '__main__':
     task = GenerateExposureMonitorData()
-    task.run()
+    # task.run()
+    task.update_facct_cps_allocation_from_zbw()
