@@ -59,16 +59,12 @@ class Globals:
 
         self.col_trade_bs_by_acct = self.db_trade_data['trade_balance_sheet_by_acctid']
         self.col_trade_bs_by_prdcode = self.db_trade_data['trade_balance_sheet_by_prdcode']
+        self.col_trade_position_allocated_to_non_cta = self.db_trade_data['trade_position_allocated_to_non_cta']
+        self.col_trade_position = self.db_trade_data['trade_position']
+
 
         # post trade
         self.db_post_trade_data = self.server_mongodb['post_trade_data']
-
-        self.list_acctidsbymxz_cta = []
-        for dict_acctinfo in self.col_acctinfo.find({'DataDate': self.str_today}):
-            if dict_acctinfo['StrategiesAllocationByAcct']:
-                list_strategies = dict_acctinfo['StrategiesAllocationByAcct'].split(';')
-                if 'CTA' in list_strategies:
-                    self.list_acctidsbymxz_cta.append(dict_acctinfo['AcctIDByOuWangJiang4FTrd'])
 
         # 其他
         self.dict_exchange2secidsrc = {'深A': 'SZSE', '沪A': 'SSE'}

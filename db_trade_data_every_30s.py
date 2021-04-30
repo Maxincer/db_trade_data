@@ -2209,6 +2209,13 @@ class GenerateExposureMonitorData:
         if list_dicts_position:
             self.gl.db_trade_data['trade_position'].delete_many({'DataDate': self.gl.str_today})
             self.gl.db_trade_data['trade_position'].insert_many(list_dicts_position)
+
+        # 对含有CTA策略的产品的期货持仓进行修改
+
+
+
+
+
         print('Update position finished.')
 
     def exposure_analysis(self):
@@ -2384,26 +2391,75 @@ class GenerateExposureMonitorData:
             self.gl.col_trade_bs_by_prdcode.insert_many(list_dict_prdcode_bs)
         print('Exposure analysis finished.')
 
-    def update_facct_cps_allocation_from_zbw(self):
-        for acctidbyowj in self.gl.list_acctidsbymxz_cta:
-            dirpath_cps_allocation = f'//192.168.2.177/PosSave_Check/{self.gl.str_today}/{acctidbyowj}'
-            # 遍历文件夹内容，找到最新文件名的文件
-            list_fns = os.listdir(dirpath_cps_allocation)
-            list_fns.sort()
-            fn_cps_allocation = list_fns[-1]
-            fpath_cps_allocation = os.path.join(dirpath_cps_allocation, fn_cps_allocation)
-            with open(fpath_cps_allocation, 'rb') as f:
-                dict_cps_allocation = pickle.load(f)
-                if f'{acctidbyowj}_Hedge' in dict_cps_allocation:
-                    list_contracts = dict_cps_allocation[f'{acctidbyowj}_Hedge']['contract_all']
-                    list_qty = [float(_) for _ in dict_cps_allocation[f'{acctidbyowj}_Hedge']['target_holding_term']]
+    def update_position_allocated_to_non_cta(self):
+        list_dicts_position_allocated_to_non_cta = []
+        list_acctidsbymxz_with_cta = []
+        for dict_acctinfo in self.gl.col_acctinfo.find({'DataDate': self.gl.str_today}):
+            acctidbymxz = dict_acctinfo['AcctIDByMXZ']
+            if dict_acctinfo['StrategiesAllocationByAcct']:
+                list_strategies = dict_acctinfo['StrategiesAllocationByAcct'].split(';')
+                if 'CTA' in list_strategies:
+                    list_acctidsbymxz_with_cta.append(acctidbymxz)
+                    acctidbyowj = dict_acctinfo['AcctIDByOuWangJiang4FTrd']
+                    dirpath_cps_allocation = f'//192.168.2.177/PosSave_Check/{self.gl.str_today}/{acctidbyowj}'
+                    # 遍历文件夹内容，找到最新文件名的文件
+                    list_fns = os.listdir(dirpath_cps_allocation)
+                    list_fns.sort()
+                    fn_cps_allocation = list_fns[-1]
+                    fpath_cps_allocation = os.path.join(dirpath_cps_allocation, fn_cps_allocation)
+                    with open(fpath_cps_allocation, 'rb') as f:
+                        dict_cps_allocation = pickle.load(f)
+                        if f'{acctidbyowj}_Hedge' in dict_cps_allocation:
+                            list_contracts = dict_cps_allocation[f'{acctidbyowj}_Hedge']['contract_all']
+                            list_qty = [float(_) for _ in dict_cps_allocation[f'{acctidbyowj}_Hedge']['target_holding_term']]
+                            dict_contract2qty = dict(zip(list_contracts, list_qty))
+                            for secid, qty in dict_contract2qty.items():
+                                if qty > 0:
+                                    longqty = qty
+                                    shortqty = 0
+                                elif qty < 0:
+                                    shortqty = qty
+                                    longqty = 0
+                                else:
+                                    continue
 
+                                windcode = self.gl.dict_future2spot[secid[:-4]]  # todo 此处假设为现货
+                                lastpx = (
+                                        orjson.loads(self.server_redis_md.get(f'index_{windcode}'))
+                                        ['LastIndex'] / 10000
+                                )
+                                longamt = longqty * lastpx
+                                shortamt = shortqty * lastpx
 
+                                dict_position_allocated_to_non_cta = {
+                                    'DataDate': self.gl.str_today,
+                                    'UpdateTime': f"{fn_cps_allocation.split(',')[0]}",
+                                    'AcctIDByMXZ': acctidbymxz,
+                                    'SecurityID': secid,
+                                    'SecurityType': 'IndexFuture',
+                                    'Symbol': None,
+                                    'SecurityIDSource': 'CFFEX',
+                                    'LongQty': longqty,
+                                    'ShortQty': shortqty,
+                                    'NetQty': longqty - shortqty,
+                                    'LongAmt': longamt,
+                                    'ShortAmt': shortamt,
+                                    'NetAmt': longamt - shortamt,
+                                }
+                                list_dicts_position_allocated_to_non_cta.append(dict_position_allocated_to_non_cta)
+        self.gl.col_trade_position_allocated_to_non_cta.delete_many({'DataDate': self.gl.str_today})
+        if list_dicts_position_allocated_to_non_cta:
+            self.gl.col_trade_position_allocated_to_non_cta.insert_many(list_dicts_position_allocated_to_non_cta)
 
-                    dict_contract2qty = dict(zip(list_contracts, list_qty))
-                else:
-                    dict_contract2qty = {contract: 0 for contract in list_contracts}
+        for acctidbymxz in list_acctidsbymxz_with_cta:
+            list_dicts_position_allocated_by_acct = []
+            for dict_position_allocated_to_non_cta in list_dicts_position_allocated_to_non_cta:
+                if acctidbymxz == dict_position_allocated_to_non_cta['AcctIDByMXZ']:
+                    list_dicts_position_allocated_by_acct.append(dict_position_allocated_to_non_cta)
 
+            self.gl.col_trade_position.delete_many({'DataDate': self.gl.str_today, 'AcctIDByMXZ': acctidbymxz})
+            if list_dicts_position_allocated_by_acct:
+                self.gl.col_trade_position.insert_many(list_dicts_position_allocated_by_acct)
 
     def run(self):
         while True:
@@ -2412,6 +2468,7 @@ class GenerateExposureMonitorData:
                 self.update_trdraw_f()
             self.update_trdfmt_cmfo()
             self.update_position()
+            self.update_position_allocated_to_non_cta()  # 分策略
             self.get_col_bs()
             self.exposure_analysis()
             print('Next round.')
