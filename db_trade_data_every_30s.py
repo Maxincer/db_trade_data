@@ -50,7 +50,6 @@ class GenerateExposureMonitorData:
         self.list_warn = []
         self.id2source = ID2Source(self.gl.db_basicinfo, 'data/security_id.xlsx')
 
-
     def read_rawdata_from_trdclient(
             self, fpath, sheet_type, data_source_type, accttype, idinfo, dict_acctidbymxz2acctidbyborker
     ):
@@ -107,7 +106,7 @@ class GenerateExposureMonitorData:
                                 dict_fund['AcctIDByMXZ'] = idinfo[dict_fund['资金账号']]
                                 list_ret.append(dict_fund)
 
-            elif data_source_type in ['hait_ehfz_api']:
+            elif data_source_type in ['hait_ehfz_api', 'hc_tradex_api']:
                 for acctidbybroker in idinfo:
                     try:
                         fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today).replace('<ID>', acctidbybroker)
@@ -267,6 +266,22 @@ class GenerateExposureMonitorData:
             elif data_source_type in ['trader_api']:
                 pass
 
+            elif data_source_type in ['patch']:
+                fpath_replaced = fpath
+                with codecs.open(fpath_replaced, 'rb', 'gbk') as f:
+                    list_datalines = f.readlines()
+                    if len(list_datalines) == 0:
+                        logger_expo.warning('读取空白文件%s' % fpath)
+                    else:
+                        list_keys = list_datalines[0].strip().split(',')
+                    for dataline in list_datalines[1:]:
+                        list_values = dataline.strip().split(',')
+                        if len(list_values) == len(list_keys):
+                            dict_fund = dict(zip(list_keys, list_values))
+                            if dict_fund['AcctIDByBroker'] in idinfo:
+                                dict_fund['AcctIDByMXZ'] = idinfo[dict_fund['AcctIDByBroker']]
+                                list_ret.append(dict_fund)
+
             else:
                 e = f'Field data_source_type {data_source_type} when reading fund data!'
                 print(e)
@@ -329,7 +344,7 @@ class GenerateExposureMonitorData:
                                 dict_rec_holding['AcctIDByMXZ'] = idinfo[dict_rec_holding['资金账号']]
                                 list_ret.append(dict_rec_holding)
 
-            elif data_source_type in ['hait_ehfz_api']:  # 有改动
+            elif data_source_type in ['hait_ehfz_api', 'hc_tradex_api']:  # 有改动
                 for acctidbybroker in idinfo:
                     fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today).replace('<ID>', acctidbybroker)
                     try:
@@ -479,10 +494,26 @@ class GenerateExposureMonitorData:
                         for dataline in list_datalines[1:]:
                             list_values = dataline.strip().split(',')
                             if len(list_values) == len(list_keys):
-                                dict_fund = dict(zip(list_keys, list_values))
-                                if dict_fund['账号'] in idinfo:
-                                    dict_fund['AcctIDByMXZ'] = idinfo[dict_fund['账号']]
-                                    list_ret.append(dict_fund)
+                                dict_holding = dict(zip(list_keys, list_values))
+                                if dict_holding['账号'] in idinfo:
+                                    dict_holding['AcctIDByMXZ'] = idinfo[dict_holding['账号']]
+                                    list_ret.append(dict_holding)
+
+            elif data_source_type in ['patch']:
+                fpath_replaced = fpath
+                with codecs.open(fpath_replaced, 'rb', 'gbk') as f:
+                    list_datalines = f.readlines()
+                    if len(list_datalines) == 0:
+                        logger_expo.warning('读取空白文件%s' % fpath)
+                    else:
+                        list_keys = list_datalines[0].strip().split(',')
+                    for dataline in list_datalines[1:]:
+                        list_values = dataline.strip().split(',')
+                        if len(list_values) == len(list_keys):
+                            dict_holding = dict(zip(list_keys, list_values))
+                            if dict_holding['AcctIDByBroker'] in idinfo:
+                                dict_holding['AcctIDByMXZ'] = idinfo[dict_holding['AcctIDByBroker']]
+                                list_ret.append(dict_holding)
 
             else:
                 raise ValueError(f'Unknown datasrc type {data_source_type} when reading holding data.')
@@ -506,7 +537,7 @@ class GenerateExposureMonitorData:
                                 dict_rec_order['AcctIDByMXZ'] = idinfo[dict_rec_order['资金账号']]
                                 list_ret.append(dict_rec_order)
 
-            elif data_source_type in ['hait_ehfz_api']:
+            elif data_source_type in ['hait_ehfz_api', 'hc_tradex_api']:
                 for acctidbybroker in idinfo:
                     try:
                         fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today).replace('<ID>', acctidbybroker)
@@ -677,7 +708,40 @@ class GenerateExposureMonitorData:
 
         elif sheet_type == 'short_position':
             # todo 留出接口
-            pass
+            if data_source_type in ['patch']:
+                fpath_replaced = fpath
+                with codecs.open(fpath_replaced, 'rb', 'gbk') as f:
+                    list_datalines = f.readlines()
+                    if len(list_datalines) == 0:
+                        logger_expo.warning('读取空白文件%s' % fpath)
+                    else:
+                        list_keys = list_datalines[0].strip().split(',')
+                    for dataline in list_datalines[1:]:
+                        list_values = dataline.strip().split(',')
+                        if len(list_values) == len(list_keys):
+                            dict_short_position = dict(zip(list_keys, list_values))
+                            if dict_short_position['AcctIDByBroker'] in idinfo:
+                                dict_short_position['AcctIDByMXZ'] = idinfo[dict_short_position['AcctIDByBroker']]
+                                list_ret.append(dict_short_position)
+
+            elif data_source_type in self.gl.list_data_src_htpb:  # 有改动
+                fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today)
+                with codecs.open(fpath_replaced, 'rb', 'gbk') as f:
+                    list_datalines = f.readlines()
+                    if len(list_datalines) == 0:
+                        logger_expo.warning('读取空白文件%s' % fpath_replaced)
+                    else:
+                        list_keys = list_datalines[0].strip().split(',')
+                    for dataline in list_datalines[1:]:
+                        list_values = dataline.strip().split(',')
+                        if len(list_values) == len(list_keys):
+                            dict_rec_holding = dict(zip(list_keys, list_values))
+                            if dict_rec_holding['资金账户'] in idinfo:
+                                dict_rec_holding['AcctIDByMXZ'] = idinfo[dict_rec_holding['资金账户']]
+                                list_ret.append(dict_rec_holding)
+
+            else:
+                pass
         else:
             raise ValueError('Wrong sheet name!')
         return list_ret
@@ -692,7 +756,9 @@ class GenerateExposureMonitorData:
 
         dict_fpath_trddata2acct = {}
         dict_acctidbymxz2acctidbybroker = {}
-        for dict_acctinfo in self.gl.col_acctinfo.find({'DataDate': self.gl.str_today, 'DataDownloadMark': 1}):
+        for dict_acctinfo in self.gl.col_acctinfo.find(
+                {'DataDate': self.gl.str_today, 'DataDownloadMark': 1}
+        ):
             fpath_trddata = dict_acctinfo['TradeDataFilePath']
             acctidbymxz = dict_acctinfo['AcctIDByMXZ']
             acctidbybroker = dict_acctinfo['AcctIDByBroker']
@@ -751,7 +817,7 @@ class GenerateExposureMonitorData:
         for ch in dict_col_rawdata:
             if dict_list_upload_recs[ch]:
                 dict_col_rawdata[ch].delete_many(
-                    {'DataDate': self.gl.str_today, 'AcctType': {'$in': ['c', 'm', 'o']}}
+                    {'DataDate': self.gl.str_today, 'DataSourceType': {'$nin': ['trader_api']}}
                 )
                 dict_col_rawdata[ch].insert_many(dict_list_upload_recs[ch])
         print('Update all raw data finished.')
@@ -848,39 +914,41 @@ class GenerateExposureMonitorData:
                     self.gl.col_trade_rawdata_order.insert_many(list_future_data_trdrec)
         print('Update future account finished.')
 
-    def formulate_raw_data(self, acctidbymxz, accttype, patchpath, sheet_type, raw_list):
+    def formulate_raw_data(self, acctidbymxz, accttype, sheet_type, raw_list):
         list_dicts_fmtted = []
-        if accttype in ['c', 'm'] and patchpath is None:
+        if accttype in ['c', 'm', 'o']:
             # ---------------  FUND 相关列表  ---------------------
             # 现金, 资产负债表概念, 现金 = 总资产-总市值, cash account 中的cash的值 = available_fund,
             # 可用资金, 交易概念, 包括: 可用于交易担保品资金, 可用于交易证券资金
             list_fields_af = [
-                '可用', 'A股可用', '可用数', '现金资产', '可用金额', '资金可用金', '可用余额',
-                'T+0交易可用金额', 'enable_balance', 'fund_asset', '可用资金', 'instravl','买担保品可用资金'
+                '可用', 'A股可用', '可用数', '现金资产', '可用金额', '资金可用金', '可用余额', 'available_balance',
+                'T+0交易可用金额', 'enable_balance', 'fund_asset', '可用资金', 'instravl', '买担保品可用资金', 'AvailableFund'
             ]
             list_fields_ttasset = [
                 '总资产', '资产', '总 资 产', '实时总资产', '单元总资产', '资产总额', '产品总资产',
-                '账户总资产', '担保资产', 'asset_balance', 'assure_asset', '账户资产', '资产总值',
+                '账户总资产', '担保资产', 'asset_balance', 'assure_asset', '账户资产', '资产总值', 'total_asset','TotalAsset'
             ]
-            list_fields_na = ['netasset', 'net_asset', '账户净值', '净资产']
+            list_fields_na = ['netasset', 'net_asset', '账户净值', '净资产', 'NetAsset']
             list_fields_kqzj = [
                 '可取资金', '可取金额', 'fetch_balance', '沪深T+1交易可用', '可取余额', 'T+1交易可用金额', '可取数', '可取现金',
-                '可转出资产',
+                '可转出资产', 'withdrawable_balance'
             ]
             list_fields_tl = ['总负债', 'total_debit']
             list_fields_mktvalue = ['总市值', 'market_value', '证券资产', '证券市值', '股票市值']
 
             # ---------------  Security 相关列表  ---------------------
-            list_fields_secid = ['代码', '证券代码', 'stock_code', 'stkcode']
+            list_fields_secid = ['代码', '证券代码', 'stock_code', 'stkcode', 'symbol', 'SecurityID']
             list_fields_symbol = ['证券名称', 'stock_name', '股票名称', '名称']
             list_fields_shareholder_acctid = ['股东帐户', '股东账号', '股东代码']
             list_fields_exchange = [
-                '市场代码', '交易市场', '交易板块', '板块', '交易所', '交易所名称', '交易市场', 'exchange_type', 'market', '市场'
+                '市场代码', '交易市场', '交易板块', '板块', '交易所', '交易所名称', '交易市场', 'exchange_type', 'market', '市场',
+                'Market'
             ]
 
             list_fields_longqty = [
                 '当前拥股数量', '股票余额', '拥股数量', '证券余额', '证券数量', '库存数量', '持仓数量', '参考持股', '持股数量',
-                '当前持仓', '当前余额', '当前拥股', '实际数量', '实时余额', 'current_amount', 'stkholdqty'
+                '当前持仓', '当前余额', '当前拥股', '实际数量', '实时余额', 'current_amount', 'stkholdqty', 'latest_qty',
+                'LongQty'
             ]
 
             dict_exchange2secidsrc = {
@@ -892,6 +960,7 @@ class GenerateExposureMonitorData:
                 'SH': 'SSE', 'SZ': 'SZSE',
                 '上交所A': 'SSE', '深交所A': 'SZSE',
                 '上证所': 'SSE', '深交所': 'SZSE',
+                'SH_A': 'SSE', 'SZ_A': 'SZSE',
             }
 
             dict_ambiguous_secidsrc = {
@@ -911,14 +980,17 @@ class GenerateExposureMonitorData:
             #  OrdID 最好判断下是否有一样的，（数据源可能超级加倍...）
             # 撤单数+成交数=委托数 来判断终态, ordstatus ‘部撤’有时并非终态
 
-            list_fields_cumqty = ['成交数量', 'business_amount', 'matchqty', '成交量']
-            list_fields_leavesqty = ['撤单数量', '撤销数量', 'withdraw_amount', 'cancelqty', '撤单量', '已撤数量']
-            list_fields_side = ['买卖标记', 'entrust_bs', '委托方向', '@交易类型', 'bsflag', '交易', '买卖标识']
-            list_fields_orderqty = ['委托量', 'entrust_amount', '委托数量', 'orderqty']  # XXX_deal 会给不了委托量，委托日期，委托时间，只有成交
-            list_fields_ordertime = ['委托时间', 'entrust_time', 'ordertime ', '时间', '成交时间']  # yh
-            list_fields_avgpx = ['成交均价', 'business_price', '成交价格', 'orderprice']  # 以后算balance用， exposure不用
+            list_fields_cumqty = ['成交数量', 'business_amount', 'matchqty', '成交量', 'cum_qty']
+            list_fields_leavesqty = [
+                '撤单数量', '撤销数量', 'withdraw_amount', 'cancelqty', '撤单量', '已撤数量', 'leaves_qty'
+            ]
+            list_fields_side = ['买卖标记', 'entrust_bs', '委托方向', '@交易类型', 'bsflag', '交易', '买卖标识', 'side']
+            list_fields_orderqty = ['委托量', 'entrust_amount', '委托数量', 'orderqty', 'quantity']  # XXX_deal 会给不了委托量，委托日期，委托时间，只有成交
+            list_fields_ordertime = ['委托时间', 'entrust_time', 'ordertime ', '时间', '成交时间', 'transact_time']  # yh
+            list_fields_avgpx = ['成交均价', 'business_price', '成交价格', 'orderprice', 'avg_price']  # 以后算balance用， exposure不用
             dict_fmtted_side_name = {'买入': 'buy', '卖出': 'sell',
                                      '限价担保品买入': 'buy', '限价买入': 'buy', '担保品买入': 'buy', 'BUY': 'buy',
+                                     'Buy': 'buy', 'Sell': 'sell',
                                      # 担保品=券； 限价去掉,含"...“即可
                                      '限价卖出': 'sell', '限价担保品卖出': 'sell', '担保品卖出': 'sell', 'SELL': 'sell',
                                      '0B': 'buy', '0S': 'sell', '证券买入': 'buy', '证券卖出': 'sell',
@@ -954,19 +1026,19 @@ class GenerateExposureMonitorData:
             #     'htpb': {'已成': 'Filled', '已撤': 'Canceled', '废单': 'Rejected', '部撤': 'Partially Filled'},
             #     }
             list_date_format = ['%Y%m%d']
-            list_time_format = ['%H%M%S', '%H:%M:%S', '%Y/%m/%d %H:%M:%S', '%Y-%m-%d %H:%M:%S']
+            list_time_format = ['%H%M%S', '%H:%M:%S', '%Y/%m/%d %H:%M:%S', '%Y-%m-%d %H:%M:%S', '%Y%m%d%H%M%S']
             # -------------  SECURITY LOAN 相关列表  ---------------------
             # todo 加hait_xtpb; huat_matic参考其手册;
             #  pluto 合约类型，合约状态里的1和huat里的1指代一个吗？
             #  这块 有不少问题！！！目前只关注short暂不会出错
-            list_fields_shortqty = ['未还合约数量', 'real_compact_amount', '未还负债数量', '发生数量']  # 未还合约数量一般是开仓数量
+            list_fields_shortqty = ['未还合约数量', 'real_compact_amount', '未还负债数量', '发生数量', 'ShortQty']  # 未还合约数量一般是开仓数量
             # 合约和委托没有关系了，但是用contract还是compact(券商版）?
             list_fields_contractqty = ['合约开仓数量', 'business_amount', '成交数量']  # 国外sell short约为“融券卖出”
             # list_fields_contracttype = ['合约类型', 'compact_type']  # 一定能分开 锁券与否
             # list_fields_contractstatus = ['合约状态', 'compact_status', '@负债现状']  # filled='完成'那不是委托？融资融券能用
             list_fields_opdate = ['合约开仓日期', 'open_date', '发生日期']  # FIX 合约: contract
             list_fields_sernum = ['成交编号', '合同编号', 'entrust_no', '委托序号', '合约编号', '合同号', 'instr_no', '成交序号',
-                                  '订单号', '委托编号']
+                                  '订单号', '委托编号', 'order_id']
             # SerialNumber 券商不统一，目前方便区分是否传了两遍..然而entrust_no还是重复 (RZRQ里的business_no)可以
             list_fields_compositesrc = []  # todo CompositeSource
 
@@ -1602,34 +1674,6 @@ class GenerateExposureMonitorData:
                             print(err, dict_secloan)
                             logger_expo.debug((err, dict_secloan))
 
-                    # flag_check_new_name = True
-                    # for field_contractstatus in list_fields_contractstatus:
-                    #     if field_contractstatus in dict_secloan:
-                    #         contractstatus = str(dict_secloan[field_contractstatus])
-                    #         if contractstatus in dict_contractstatus_fmt:
-                    #             contractstatus = dict_contractstatus_fmt[contractstatus]
-                    #         else:
-                    #             logger_expo.debug('Unknown contractstatus %s'%contractstatus)
-                    #         # if contractstatus is None:
-                    #         #     raise Exception('During Clearing, we can not have ambiguous status in the compact')
-                    #         flag_check_new_name = False
-                    #
-                    # if flag_check_new_name:
-                    #     logger_expo.debug(('unknown field_contractstatus name', dict_secloan))
-
-                    # flag_check_new_name = True
-                    # for field_contracttype in list_fields_contracttype:
-                    #     if field_contracttype in dict_secloan:
-                    #         contracttype = str(dict_secloan[field_contracttype])
-                    #         if contracttype in dict_contracttype_fmt:
-                    #             contracttype = dict_contracttype_fmt[contracttype]
-                    #         else:
-                    #             logger_expo.debug('Unknown contractstatus %s'%contracttype)
-                    #         flag_check_new_name = False
-                    # if flag_check_new_name:
-                    #     if data_source != 'hait_ehfz_api':
-                    #         logger_expo.debug(('unknown field_contracttype name', dict_secloan))
-
                     flag_check_new_name = True
                     for field_opdate in list_fields_opdate:
                         if field_opdate in dict_secloan:
@@ -1681,6 +1725,14 @@ class GenerateExposureMonitorData:
                     elif sectype in ['MMF']:
                         lastpx = 100
                         shortamt = lastpx * shortqty
+
+                    elif sectype in ['ETF']:
+                        if windcode in ['510500.SH']:
+                            lastpx = 7.21
+                        else:
+                            lastpx = orjson.loads(self.server_redis_md.get(f"index_{windcode}"))['LastIndex'] / 10000
+                        shortamt = lastpx * shortqty
+
                     else:
                         shortamt = None
 
@@ -1706,14 +1758,36 @@ class GenerateExposureMonitorData:
             else:
                 raise ValueError('Unknown f_h_o_s_mark')
 
-        elif accttype in ['f'] and patchpath is None:
+        elif accttype in ['f']:
+            list_fields_cash = ['DYNAMICBALANCE', '账户权益']
+            list_fields_kyzj = ['USABLECURRENT', '可用保证金']
+            list_fields_secid = ['instrument_id', '合约代码']
+            list_fields_secidsrc = ['exchange', '交易市场']
+            list_fields_side = ['direction', '买卖']
+            list_fields_position = ['position', '总持仓']
+
+            secid = None
+            secidsrc = None
+            side = None
+            longqty = None
+            shortqty = None
+
             if sheet_type == 'fund':
                 list_dicts_future_fund = raw_list
                 for dict_fund_future in list_dicts_future_fund:
                     str_updatetime = dict_fund_future['UpdateTime']
-                    cash = dict_fund_future['DYNAMICBALANCE']
+                    cash = None
+                    kyzj = None
+
+                    for field_cash in list_fields_cash:
+                        if field_cash in dict_fund_future:
+                            cash = float(dict_fund_future[field_cash])
+
+                    for field_kyzj in list_fields_kyzj:
+                        if field_kyzj in dict_fund_future:
+                            kyzj = float(dict_fund_future[field_kyzj])
+
                     acctidbymxz = dict_fund_future['AcctIDByMXZ']
-                    kyzj = dict_fund_future['USABLECURRENT']
                     dict_future_fund_fmtted = {
                         'DataDate': self.gl.str_today,
                         'UpdateTime': str_updatetime,
@@ -1725,14 +1799,19 @@ class GenerateExposureMonitorData:
                         'AvailableFund': kyzj,
                     }
                     list_dicts_fmtted.append(dict_future_fund_fmtted)
-                # todo 期货的合约直接放到 position, 双向(其实holding应该抽象为long_position)。
 
             elif sheet_type == 'holding':
                 list_dicts_future_holding = raw_list
                 for dict_holding_future in list_dicts_future_holding:
                     str_updatetime = dict_holding_future['UpdateTime']
-                    secid = dict_holding_future['instrument_id']
-                    secidsrc = dict_holding_future['exchange']
+
+                    for field_secid in list_fields_secid:
+                        if field_secid in dict_holding_future:
+                            secid = dict_holding_future[field_secid]
+
+                    for field_secidsrc in list_fields_secidsrc:
+                        if field_secidsrc in dict_holding_future:
+                            secidsrc = dict_holding_future[field_secidsrc]
 
                     if secid[:-4] in ['IC', 'IF', 'IH']:
                         sectype = 'IndexFuture'
@@ -1747,9 +1826,15 @@ class GenerateExposureMonitorData:
 
                     multiplier = self.gl.dict_future2multiplier[secid[:-4]]
                     acctidbymxz = dict_holding_future['AcctIDByMXZ']
-                    direction = dict_holding_future['direction']
-                    if direction in ['buy']:
-                        longqty = dict_holding_future['position']
+
+                    for field_side in list_fields_side:
+                        if field_side in dict_holding_future:
+                            side = dict_holding_future[field_side]
+
+                    if side in ['buy', '买']:
+                        for field_position in list_fields_position:
+                            if field_position in dict_holding_future:
+                                longqty = float(dict_holding_future[field_position])
                         longamt = longqty * lastpx * multiplier
                         dict_holding_fmtted = {
                             'DataDate': self.gl.str_today,
@@ -1774,9 +1859,18 @@ class GenerateExposureMonitorData:
                 for dict_holding_future_short_position in list_dicts_future_short_position:
                     str_updatetime = dict_holding_future_short_position['UpdateTime']
                     acctidbymxz = dict_holding_future_short_position['AcctIDByMXZ']
-                    direction = dict_holding_future_short_position['direction']
-                    secid = dict_holding_future_short_position['instrument_id']
-                    secidsrc = dict_holding_future_short_position['exchange']
+
+                    for field_side in list_fields_side:
+                        if field_side in dict_holding_future_short_position:
+                            side = dict_holding_future_short_position[field_side]
+
+                    for field_secid in list_fields_secid:
+                        if field_secid in dict_holding_future_short_position:
+                            secid = dict_holding_future_short_position[field_secid]
+
+                    for field_secidsrc in list_fields_secidsrc:
+                        if field_secidsrc in dict_holding_future_short_position:
+                            secidsrc = dict_holding_future_short_position[field_secidsrc]
 
                     if secid[:-4] in ['IC', 'IF', 'IH']:
                         sectype = 'IndexFuture'
@@ -1790,8 +1884,11 @@ class GenerateExposureMonitorData:
                         lastpx = orjson.loads(self.server_redis_md.get(f'market_{windcode}')['LastPrice']) / 10000
                         multiplier = self.gl.dict_future2multiplier[secid[:-4]]
 
-                    if direction in ['sell']:
-                        shortqty = dict_holding_future_short_position['position']
+                    if side in ['sell', '卖']:
+
+                        for field_position in list_fields_position:
+                            if field_position in dict_holding_future_short_position:
+                                shortqty = float(dict_holding_future_short_position[field_position])
                         shortamt = shortqty * lastpx * multiplier
                         dict_trddata_fmtted_short_position = {
                             'DataDate': self.gl.str_today,
@@ -1809,32 +1906,24 @@ class GenerateExposureMonitorData:
                         list_dicts_fmtted.append(dict_trddata_fmtted_short_position)
             else:
                 raise ValueError('Unknown sheet type.')
-
-        elif patchpath:
-            if accttype == 'o':
-                # todo patch 里场外暂时放放
-                pass
-            else:
-                df = pd.read_excel(patchpath, dtype=str, sheet_name=sheet_type)
-                df = df.where(df.notnull(), None)
-                for i, row in df.iterrows():
-                    doc = dict(row)
-                    doc['UpdateTime'] = datetime.now().strftime('%H%M%S')
-                    doc['DataDate'] = self.gl.str_today
-                    list_dicts_fmtted.append(doc)
+        #
+        # elif patchpath:
+        #     if accttype == 'o':
+        #         # todo patch 里场外暂时放放
+        #         pass
+        #     else:
+        #         df = pd.read_excel(patchpath, dtype=str, sheet_name=sheet_type)
+        #         df = df.where(df.notnull(), None)
+        #         for i, row in df.iterrows():
+        #             doc = dict(row)
+        #             doc['UpdateTime'] = datetime.now().strftime('%H%M%S')
+        #             doc['DataDate'] = self.gl.str_today
+        #             list_dicts_fmtted.append(doc)
         else:
             logger_expo.debug('Unknown account type in basic account info.')
         return list_dicts_fmtted
 
     def update_trdfmt_cmfo(self):
-        dict_acct2patch = {}
-        for _ in self.gl.col_datapatch.find({'DataDate': self.gl.str_today}):
-            acctid = _['AcctIDByMXZ']
-            if acctid in dict_acct2patch:
-                dict_acct2patch[acctid].append(_)
-            else:
-                dict_acct2patch[acctid] = [_]
-
         dict_sheet_type2col = {
             'fund': self.gl.col_trade_rawdata_fund,
             'holding': self.gl.col_trade_rawdata_holding,
@@ -1867,27 +1956,14 @@ class GenerateExposureMonitorData:
         ):
             acctidbymxz = dict_acctinfo['AcctIDByMXZ']
             accttype = dict_acctinfo['AcctType']
-            patchpaths = {}
-            if dict_acctinfo['PatchMark']:
-                for _ in dict_acct2patch[acctidbymxz]:
-                    patchpaths[_['SheetName']] = _['DataFilePath']
 
             for sheet_type in dict_sheet_type2dict_acctidbymxz2list_dicts_trdraw.keys():
-                if sheet_type in patchpaths:
-                    patchpath = patchpaths[sheet_type]
-                else:
-                    patchpath = None
-
-                # 有patch就不从数据库里取
-                if acctidbymxz in dict_sheet_type2dict_acctidbymxz2list_dicts_trdraw[sheet_type] and patchpath is None:
+                if acctidbymxz in dict_sheet_type2dict_acctidbymxz2list_dicts_trdraw[sheet_type]:
                     raw_list = dict_sheet_type2dict_acctidbymxz2list_dicts_trdraw[sheet_type][acctidbymxz]
-                elif patchpath:
-                    raw_list = None
                 else:
                     continue
-
                 # Note3. raw_list  {stock:{fund:{acctid: [准备format的list]}}}里的 ‘准备format的list’
-                list_dicts_fmtted = self.formulate_raw_data(acctidbymxz, accttype, patchpath, sheet_type, raw_list)
+                list_dicts_fmtted = self.formulate_raw_data(acctidbymxz, accttype, sheet_type, raw_list)
                 dict_shtype2listfmtted[sheet_type] += list_dicts_fmtted
 
         for sheet_type in dict_shtype2listfmtted:
@@ -1973,7 +2049,7 @@ class GenerateExposureMonitorData:
                 else:
                     dict_pair2allcol.update({tuple_pair: {col_name: [dict_post_trade_data_last_trddate_copy]}})
 
-        # 注: 此处只使用了 short position中的期货数据，margin account 不用short_position.
+        # 注: 此处只使用了 short position中的期货和o数据，margin account 不用short_position.
         for col_name in ['trade_formatted_data_short_position']:
             for dict_trade_data in self.gl.db_trade_data[col_name].find(
                     {'DataDate': self.gl.str_today}, {'_id': 0}
@@ -1984,7 +2060,7 @@ class GenerateExposureMonitorData:
                 accttype = acctidbymxz.split('_')[1]
                 sectype = dict_trade_data['SecurityType']
 
-                if accttype in ['f']:
+                if accttype in ['o', 'f']:
                     tuple_pair = (acctidbymxz, secid, secidsrc, sectype)
                     if secid in dict_learn_secid2src:
                         if dict_learn_secid2src[secid] != secidsrc:
@@ -2000,6 +2076,7 @@ class GenerateExposureMonitorData:
                             dict_pair2allcol[tuple_pair].update({col_name: [dict_trade_data_copy]})
                     else:
                         dict_pair2allcol.update({tuple_pair: {col_name: [dict_trade_data_copy]}})
+
 
 
         # for col_name in ['trade_future_api_holding']:
@@ -2064,7 +2141,7 @@ class GenerateExposureMonitorData:
             except KeyError:  # pair may not has 'fmtdata_holding' etc key
                 list_dicts_trade_fmtdata_order = []
 
-            if accttype in ['c', 'm', 'o']:
+            if accttype in ['c', 'm']:
                 if len(tuple_pair) == 4:
                     sectype = tuple_pair[3]
 
@@ -2147,7 +2224,7 @@ class GenerateExposureMonitorData:
                     }
                     list_dicts_position.append(dict_position)
 
-            elif accttype in ['f']:
+            elif accttype in ['f', 'o']:
                 longqty = 0
                 longamt = 0
                 shortqty = 0
@@ -2209,13 +2286,6 @@ class GenerateExposureMonitorData:
         if list_dicts_position:
             self.gl.db_trade_data['trade_position'].delete_many({'DataDate': self.gl.str_today})
             self.gl.db_trade_data['trade_position'].insert_many(list_dicts_position)
-
-        # 对含有CTA策略的产品的期货持仓进行修改
-
-
-
-
-
         print('Update position finished.')
 
     def exposure_analysis(self):
@@ -2316,6 +2386,7 @@ class GenerateExposureMonitorData:
                 {'DataDate': self.gl.str_today, 'DataDownloadMark': 1}, {'_id': 0}
         ):
             acctidbymxz = dict_acctinfo['AcctIDByMXZ']
+            accttype = dict_acctinfo['AcctType']
             prdcode = dict_acctinfo['PrdCode']
             mdm = dict_acctinfo['MonitorDisplayMark']
             if acctidbymxz in dict_acctidbymxz2dict_fund:
@@ -2358,7 +2429,7 @@ class GenerateExposureMonitorData:
                             if flag_ta:
                                 cash -= dict_position['LongAmt']  # cash = 净资产 - （总市值 - 总负债） （约为LongAmt）
 
-            if flag_cash and '_c_' in acctidbymxz:
+            if flag_cash and accttype in ['c', 'o', 'f']:  # todo 此处不严谨
                 avlfund = cash
 
             dict_bs_by_acct = {
@@ -2369,8 +2440,8 @@ class GenerateExposureMonitorData:
             list_dicts_bs_by_acct.append(dict_bs_by_acct)
 
             if prdcode in dict_prdcode2dict_bs_by_acct:
-                for key in ['Cash', 'NetAsset', 'AvailableFund']:
-                    dict_prdcode2dict_bs_by_acct[prdcode][key] += dict_bs_by_acct[key]
+                for key in ['NetAsset', 'Cash', 'AvailableFund']:  # todo 去掉了available fund
+                    dict_prdcode2dict_bs_by_acct[prdcode][key] += float(dict_bs_by_acct[key])
                     dict_bs_by_acct[key] = round(dict_bs_by_acct[key], 2)
             else:
                 dict_bs_by_acct_copy = dict_bs_by_acct.copy()
@@ -2409,16 +2480,24 @@ class GenerateExposureMonitorData:
                     fpath_cps_allocation = os.path.join(dirpath_cps_allocation, fn_cps_allocation)
                     with open(fpath_cps_allocation, 'rb') as f:
                         dict_cps_allocation = pickle.load(f)
-                        if f'{acctidbyowj}_Hedge' in dict_cps_allocation:
-                            list_contracts = dict_cps_allocation[f'{acctidbyowj}_Hedge']['contract_all']
-                            list_qty = [float(_) for _ in dict_cps_allocation[f'{acctidbyowj}_Hedge']['target_holding_term']]
+                        # Hedge key名字修正, 数字开头的加'P'
+                        if acctidbyowj[0].isdigit():
+                            acctidbyowj_adjusted = f'P{acctidbyowj}'
+                        else:
+                            acctidbyowj_adjusted = acctidbyowj
+                        if f'{acctidbyowj_adjusted}_Hedge' in dict_cps_allocation:
+                            list_contracts = dict_cps_allocation[f'{acctidbyowj_adjusted}_Hedge']['contract_all']
+                            list_qty = [
+                                float(_)
+                                for _ in dict_cps_allocation[f'{acctidbyowj_adjusted}_Hedge']['target_holding_term']
+                            ]
                             dict_contract2qty = dict(zip(list_contracts, list_qty))
                             for secid, qty in dict_contract2qty.items():
                                 if qty > 0:
                                     longqty = qty
                                     shortqty = 0
                                 elif qty < 0:
-                                    shortqty = qty
+                                    shortqty = -qty
                                     longqty = 0
                                 else:
                                     continue
@@ -2428,12 +2507,12 @@ class GenerateExposureMonitorData:
                                         orjson.loads(self.server_redis_md.get(f'index_{windcode}'))
                                         ['LastIndex'] / 10000
                                 )
-                                longamt = longqty * lastpx
-                                shortamt = shortqty * lastpx
+                                longamt = longqty * lastpx * self.gl.dict_future2multiplier[secid[:-4]]
+                                shortamt = shortqty * lastpx * self.gl.dict_future2multiplier[secid[:-4]]
 
                                 dict_position_allocated_to_non_cta = {
                                     'DataDate': self.gl.str_today,
-                                    'UpdateTime': f"{fn_cps_allocation.split(',')[0]}",
+                                    'UpdateTime': f"{fn_cps_allocation.split('.')[0]}00",
                                     'AcctIDByMXZ': acctidbymxz,
                                     'SecurityID': secid,
                                     'SecurityType': 'IndexFuture',
@@ -2463,9 +2542,9 @@ class GenerateExposureMonitorData:
 
     def run(self):
         while True:
-            self.update_trdraw_cmo()
-            if '083000' < datetime.now().strftime('%H%M%S') < '151500':
-                self.update_trdraw_f()
+            # self.update_trdraw_cmo()
+            # if '083000' < datetime.now().strftime('%H%M%S') < '151500':
+            # self.update_trdraw_f()
             self.update_trdfmt_cmfo()
             self.update_position()
             self.update_position_allocated_to_non_cta()  # 分策略
@@ -2488,5 +2567,4 @@ class GenerateExposureMonitorData:
 
 if __name__ == '__main__':
     task = GenerateExposureMonitorData()
-    # task.run()
-    task.update_facct_cps_allocation_from_zbw()
+    task.run()

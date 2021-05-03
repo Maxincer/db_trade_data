@@ -13,8 +13,8 @@ from pymongo import MongoClient
 
 from WindPy import w
 
-STR_TODAY = datetime.today().strftime('%Y%m%d')
-# STR_TODAY = '20210428'
+# STR_TODAY = datetime.today().strftime('%Y%m%d')
+STR_TODAY = '20210430'
 
 
 class Globals:
