@@ -155,6 +155,25 @@ class GenerateExposureMonitorData:
                             logger_expo.error(e)
                             print(e)
 
+            elif data_source_type in ['hx_slx_jkb', 'hx_slx_jyb']:
+                fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today)
+                with codecs.open(fpath_replaced) as f:
+                    list_datalines = f.readlines()
+                    if len(list_datalines) == 0:
+                        logger_expo.warning('读取空白文件%s' % fpath_replaced)
+                    else:
+                        list_keys = [
+                            '变动时间', '客户号', '币种', '资金余额', '可用资金', '当日入金', '当日出金', '冻结资金', '冻结手续费',
+                            '手续费', '累计市值', '在途资产（逆回购等）', '总资产'
+                        ]
+                    for dataline in list_datalines:
+                        list_values = dataline.strip().split(',')
+                        if len(list_values) == len(list_keys):
+                            dict_fund = dict(zip(list_keys, list_values))
+                            if dict_fund['客户号'] in idinfo:
+                                dict_fund['AcctIDByMXZ'] = idinfo[dict_fund['客户号']]
+                                list_ret.append(dict_fund)
+
             elif data_source_type in self.gl.list_data_src_htpb:  # 有改动
                 fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today)
                 with codecs.open(fpath_replaced, 'rb', 'gbk') as f:
@@ -328,6 +347,26 @@ class GenerateExposureMonitorData:
                                 dict_rec_holding['AcctIDByMXZ'] = idinfo[dict_rec_holding['账户编号']]
                                 list_ret.append(dict_rec_holding)
 
+            elif data_source_type in ['hx_slx_jkb', 'hx_slx_jyb']:
+                fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today)
+                with codecs.open(fpath_replaced, 'rb', 'gbk') as f:
+                    list_datalines = f.readlines()
+                    if len(list_datalines) == 0:
+                        logger_expo.warning('读取空白文件%s' % fpath_replaced)
+                    else:
+                        list_keys = [
+                            '变动时间', '客户号', '交易市场名称', '证券代码', '证券名称', '昨日余额', '当前余额', '当前可卖余额',
+                            '当日买入数量', '当日卖出数量', '持仓成本价', '累计盈亏', '今日申赎持仓', '交易市场', '市值价格',
+                            '持仓市值', '持仓成本金额',
+                        ]
+                    for dataline in list_datalines[1:]:
+                        list_values = dataline.strip().split(',')
+                        if len(list_values) == len(list_keys):
+                            dict_rec_holding = dict(zip(list_keys, list_values))
+                            if dict_rec_holding['客户号'] in idinfo:
+                                dict_rec_holding['AcctIDByMXZ'] = idinfo[dict_rec_holding['客户号']]
+                                list_ret.append(dict_rec_holding)
+
             elif data_source_type in self.gl.list_data_src_xtpb:
                 fpath_replaced = fpath.replace('<YYYYMMDD>', self.gl.str_today)
                 with codecs.open(fpath_replaced, 'rb', 'gbk') as f:
@@ -336,6 +375,7 @@ class GenerateExposureMonitorData:
                         logger_expo.warning('读取空白文件%s' % fpath_replaced)
                     else:
                         list_keys = list_datalines[0].strip().split(',')
+
                     for dataline in list_datalines[1:]:
                         list_values = dataline.strip().split(',')
                         if len(list_values) == len(list_keys):
@@ -385,6 +425,7 @@ class GenerateExposureMonitorData:
                                     dict_holding = dict(zip(list_keys, list_values))
                                     dict_holding['AcctIDByMXZ'] = idinfo[acctidbybroker]
                                     list_ret.append(dict_holding)
+
                     except FileNotFoundError as e:
                         e = str(e)
                         if e not in self.list_warn:
@@ -690,7 +731,7 @@ class GenerateExposureMonitorData:
                         fpath.replace('<YYYYMMDD>', self.gl.str_today)
                              .replace('<ID>', dict_acctidbymxz2acctidbyborker[idinfo[dldfilter]])
                     )
-                    with open(fpath_replaced) as f:
+                    with open(fpath_replaced, encoding='ansi') as f:
                         list_datalines = f.readlines()
                         if len(list_datalines) == 0:
                             logger_expo.warning('读取空白文件%s' % fpath)
@@ -703,11 +744,16 @@ class GenerateExposureMonitorData:
                                 if dict_fund['账号'] in idinfo:
                                     dict_fund['AcctIDByMXZ'] = idinfo[dict_fund['账号']]
                                     list_ret.append(dict_fund)
+
+            elif data_source_type in ['hx_slx_jkb', 'hx_slx_jyb']:
+                pass
+
             else:
                 raise ValueError(f'Unknown datasrc type {data_source_type} when reading order data.')
 
         elif sheet_type == 'short_position':
             # todo 留出接口
+            # note: 注意 patch data要分两种, holding与short_position
             if data_source_type in ['patch']:
                 fpath_replaced = fpath
                 with codecs.open(fpath_replaced, 'rb', 'gbk') as f:
@@ -739,7 +785,6 @@ class GenerateExposureMonitorData:
                             if dict_rec_holding['资金账户'] in idinfo:
                                 dict_rec_holding['AcctIDByMXZ'] = idinfo[dict_rec_holding['资金账户']]
                                 list_ret.append(dict_rec_holding)
-
             else:
                 pass
         else:
@@ -761,6 +806,7 @@ class GenerateExposureMonitorData:
         ):
             fpath_trddata = dict_acctinfo['TradeDataFilePath']
             acctidbymxz = dict_acctinfo['AcctIDByMXZ']
+            # if acctidbymxz in ['930_c_hf_1818']:
             acctidbybroker = dict_acctinfo['AcctIDByBroker']
             dict_acctidbymxz2acctidbybroker.update({acctidbymxz: acctidbybroker})
             if fpath_trddata:
@@ -823,7 +869,9 @@ class GenerateExposureMonitorData:
         print('Update all raw data finished.')
 
     def update_trdraw_f(self):
-        for _ in self.gl.col_acctinfo.find({'DataDate': self.gl.str_today, 'AcctType': 'f', 'DataDownloadMark': 1}):
+        for _ in self.gl.col_acctinfo.find(
+                {'DataDate': self.gl.str_today, 'AcctType': 'f', 'DataDownloadMark': 1, 'DataSourceType': 'trader_api'}
+        ):
             list_future_data_fund = []
             list_future_data_holding = []
             list_future_data_short_position = []
@@ -912,6 +960,7 @@ class GenerateExposureMonitorData:
                     self.gl.col_trade_rawdata_order.delete_many(
                         {'DataDate': self.gl.str_today, 'AcctIDByMXZ': acctidbymxz})
                     self.gl.col_trade_rawdata_order.insert_many(list_future_data_trdrec)
+            print(f'{acctidbymxz} trader_api data download finished.')
         print('Update future account finished.')
 
     def formulate_raw_data(self, acctidbymxz, accttype, sheet_type, raw_list):
@@ -926,7 +975,7 @@ class GenerateExposureMonitorData:
             ]
             list_fields_ttasset = [
                 '总资产', '资产', '总 资 产', '实时总资产', '单元总资产', '资产总额', '产品总资产',
-                '账户总资产', '担保资产', 'asset_balance', 'assure_asset', '账户资产', '资产总值', 'total_asset','TotalAsset'
+                '账户总资产', '担保资产', 'asset_balance', 'assure_asset', '账户资产', '资产总值', 'total_asset', 'TotalAsset'
             ]
             list_fields_na = ['netasset', 'net_asset', '账户净值', '净资产', 'NetAsset']
             list_fields_kqzj = [
@@ -934,15 +983,15 @@ class GenerateExposureMonitorData:
                 '可转出资产', 'withdrawable_balance'
             ]
             list_fields_tl = ['总负债', 'total_debit']
-            list_fields_mktvalue = ['总市值', 'market_value', '证券资产', '证券市值', '股票市值']
+            list_fields_mktvalue = ['总市值', 'market_value', '证券资产', '证券市值', '股票市值', '累计市值']
 
             # ---------------  Security 相关列表  ---------------------
             list_fields_secid = ['代码', '证券代码', 'stock_code', 'stkcode', 'symbol', 'SecurityID']
             list_fields_symbol = ['证券名称', 'stock_name', '股票名称', '名称']
             list_fields_shareholder_acctid = ['股东帐户', '股东账号', '股东代码']
             list_fields_exchange = [
-                '市场代码', '交易市场', '交易板块', '板块', '交易所', '交易所名称', '交易市场', 'exchange_type', 'market', '市场',
-                'Market'
+                '市场代码', '交易市场', '交易板块', '板块', '交易所', '交易所名称', 'exchange_type', 'market', '市场',
+                'Market', '交易市场名称'
             ]
 
             list_fields_longqty = [
@@ -961,6 +1010,7 @@ class GenerateExposureMonitorData:
                 '上交所A': 'SSE', '深交所A': 'SZSE',
                 '上证所': 'SSE', '深交所': 'SZSE',
                 'SH_A': 'SSE', 'SZ_A': 'SZSE',
+                '上海': 'SH', '深圳': 'SZ',
             }
 
             dict_ambiguous_secidsrc = {
@@ -969,7 +1019,10 @@ class GenerateExposureMonitorData:
                 'huat_matic_tsi': {'1': 'SSE', '2': 'SZSE'},
                 'yh_apama': {'0': 'SZSE', '2': 'SSE'},
                 'ax_jzpb': {'0': 'SZSE', '1': 'SSE', '深Ａ': 'SZSE', '沪Ａ': 'SSE'},
-                'gf_tyt': {'0': 'SZSE', '1': 'SSE'}
+                'gf_tyt': {'0': 'SZSE', '1': 'SSE'},
+                'hx_slx_jyb': {'1': 'SSE', '2': 'SZSE'},
+                'hx_slx_jkb': {'1': 'SSE', '2': 'SZSE'},
+
             }
 
             # -------------  ORDER 相关列表  ---------------------
@@ -2475,6 +2528,9 @@ class GenerateExposureMonitorData:
                     dirpath_cps_allocation = f'//192.168.2.177/PosSave_Check/{self.gl.str_today}/{acctidbyowj}'
                     # 遍历文件夹内容，找到最新文件名的文件
                     list_fns = os.listdir(dirpath_cps_allocation)
+                    for fns in list_fns:
+                        if 'baiduyun' in fns:
+                            list_fns.remove(fns)
                     list_fns.sort()
                     fn_cps_allocation = list_fns[-1]
                     fpath_cps_allocation = os.path.join(dirpath_cps_allocation, fn_cps_allocation)
@@ -2542,7 +2598,7 @@ class GenerateExposureMonitorData:
 
     def run(self):
         while True:
-            # self.update_trdraw_cmo()
+            self.update_trdraw_cmo()
             # if '083000' < datetime.now().strftime('%H%M%S') < '151500':
             # self.update_trdraw_f()
             self.update_trdfmt_cmfo()

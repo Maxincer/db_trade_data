@@ -13,8 +13,8 @@ from pymongo import MongoClient
 
 from WindPy import w
 
-# STR_TODAY = datetime.today().strftime('%Y%m%d')
-STR_TODAY = '20210430'
+STR_TODAY = datetime.today().strftime('%Y%m%d')
+# STR_TODAY = '20210507'
 
 
 class Globals:
@@ -62,7 +62,6 @@ class Globals:
         self.col_trade_position_allocated_to_non_cta = self.db_trade_data['trade_position_allocated_to_non_cta']
         self.col_trade_position = self.db_trade_data['trade_position']
 
-
         # post trade
         self.db_post_trade_data = self.server_mongodb['post_trade_data']
 
@@ -70,8 +69,8 @@ class Globals:
         self.dict_exchange2secidsrc = {'深A': 'SZSE', '沪A': 'SSE'}
 
         self.list_data_src_xtqmt_jjb = [
-            'dh_xtqmt_jjb',  'hr_xtqmt_jjb', 'gd_xtqmt_jjb', 'gj_xtqmt_jjb', 'zhaos_xtqmt_jjb', 'zhes_xtqmt_jjb',
-            'zh_xtqmt_jjb'
+            'cj_xtqmt_jjb', 'dh_xtqmt_jjb', 'hf_xtqmt_jjb', 'hr_xtqmt_jjb', 'gd_xtqmt_jjb', 'gh_xtqmt_jjb',
+            'gj_xtqmt_jjb', 'zhaos_xtqmt_jjb', 'zhes_xtqmt_jjb', 'zh_xtqmt_jjb', 'gl_xtqmt_jjb'
         ]
 
         self.list_data_src_xtpb = [
